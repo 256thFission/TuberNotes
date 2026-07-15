@@ -1,16 +1,12 @@
-# GooderNotes — Product & Build Spec
+# TuberNotes — Product & Build Spec
 
-> **What this is:** a prosumer, open-source iPad note-taking app with a built-in AI agent.
-> You handwrite notes; you lasso anything on the page; the model answers *on the page* using
+> **Goal:** a prosumer, open-source iPad note-taking app with built for performance and AI support.
+> You handwrite notes; you magic lasso anything on the page; the model answers *on the page* using
 > real OCR, your textbooks, and web tools.
->
-> **Who this is for:** the 5-person build team. Read §1–§6 together first, then each person owns
-> one thread (§7). Everything you need to start is here — no prior context assumed.
 
 ---
 
 ## 1. Prerequisites
-
 - **Xcode** (current) and an **iPad or simulator on iOS 26.x**; an **Apple Pencil** for real testing.
 - A **ChatGPT account** (Plus/Pro) — the app signs in with it via OAuth. Optionally an **OpenAI API
   key** for the fallback path.
@@ -22,7 +18,7 @@
 **lasso-in → harness → toast-out**:
 
 - **Input:** one primitive — the **Magic Lasso**. Circle anything (handwriting or printed textbook
-  content) and pick an action.
+  content), see a context menu, and pick an action.
 - **Brain:** an **agent harness** that calls tools and pulls context from the notebook, indexed
   textbooks, and the web.
 - **Output:** one primitive — **toasts** the model places directly on the canvas at points of
@@ -46,8 +42,7 @@ The app signs in with the user's own GPT account (the same way the open-source c
 - **Vision** — Apple's on-device framework; here it performs handwriting/text OCR with bounding boxes.
 - **DeepSeek-OCR** — an open-source document-OCR model, strong on dense/scientific pages (math,
   tables, multi-column). It runs on a GPU, offline.
-- **OpenCode** — an open-source AI agent that authenticates with a user's ChatGPT subscription over
-  OAuth and calls model tools. We use the same auth approach.
+
 
 ## 4. Principles & decisions
 
@@ -63,10 +58,10 @@ The app signs in with the user's own GPT account (the same way the open-source c
    the schema-validated toast array — the same tool-calling path OpenCode uses over OAuth.
 5. **Toast anchoring:** each toast anchors to an OCR region ID or the lasso selection; the app
    resolves that anchor to screen coordinates through the page transform.
-6. **OCR split:** on-device **Vision** serves the live lasso/handwriting path — instant, offline,
-   with bounding boxes. **DeepSeek-OCR** runs offline on a GPU host to pre-digest one textbook into a
-   static index the app ships as a bundle asset.
-7. **Scope of the OAuth path:** the subscription login is scoped to personal / self-host use; the
+6. **OCR split:** on-device **Vision models** serves the live lasso/handwriting path,
+   **DeepSeek-OCR** runs offline on a GPU host to pre-digest one textbook into a
+   static index for fast lookup.
+8. **Scope of the OAuth path:** the subscription login is scoped to personal / self-host use; the
    product presents as prosumer and single-user.
 
 ## 5. Architecture
@@ -94,7 +89,7 @@ The app signs in with the user's own GPT account (the same way the open-source c
   └──────────────────────────────────────────────────────────────┘
 ```
 
-## 6. Shared contracts — build FIRST, together (Hour 0)
+## 6. Shared contracts 
 
 One small Swift module, `Contracts`, that every thread imports and codes against; the team edits it
 by agreement. Ship a stub implementation of every protocol so each thread runs standalone before
@@ -240,12 +235,10 @@ OCR/index tuning.)*
   `place_toasts` tool call + streamed body.
 - **End-to-end:** run the §10 script on an iPad.
 
-## 12. Non-goals (explicitly out of scope for the hackathon)
+## 12. Other goals:
 
-Multi-page reflow; document-library polish and thumbnails; zip share; PDF export; per-tool color
-pickers; sync/collaboration; a portable ink format; JSON Schemas; byte-stability tests; undo beyond
-PencilKit's built-in stroke undo; on-device DeepSeek-OCR; SwiftData or any app-private database;
-schema/migration machinery; hosted or multi-tenant LLM billing.
+Multi-page reflow; document-library polish and thumbnails; Nice looking tool pallet,
+GoodNotes migration machinery?
 
 ## 13. Items to confirm during build
 
