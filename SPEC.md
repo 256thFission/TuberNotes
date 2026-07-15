@@ -14,7 +14,7 @@
 
 ## 2. Thesis
 
-**GooderNotes is GoodNotes with an agent harness.** The interaction shape is
+**TuberNotes is GoodNotes with an agent harness.** The interaction shape is
 **lasso-in → harness → toast-out**:
 
 - **Input:** one primitive — the **Magic Lasso**. Circle anything (handwriting or printed textbook
