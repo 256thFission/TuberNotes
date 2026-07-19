@@ -3,12 +3,10 @@ import SwiftUI
 @main
 struct TuberNotesApp: App {
     @StateObject private var notebookStore = NotebookStore.shared
-    @AppStorage("tuber.appearance") private var appearanceRaw = AppAppearance.system.rawValue
 
     var body: some Scene {
         WindowGroup {
             rootContent
-                .preferredColorScheme((AppAppearance(rawValue: appearanceRaw) ?? .system).colorScheme)
         }
     }
 
