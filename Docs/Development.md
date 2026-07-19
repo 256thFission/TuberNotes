@@ -32,13 +32,14 @@ End user-visible tasks with the evidence packet in `Docs/templates/EvidencePacke
 | Change type | Required scenarios | Notes |
 |---|---|---|
 | Canvas / PencilKit drawing surface | `blank-canvas`; reviewed pen fixture when applicable | Confirm ink and paper without Pin clutter; use `human-device-loop` for authentic Pencil |
+| AI drawing refinement | `ai-refine` | Confirm lasso selection, action placement, and same-region raster overlay; backend/model response remains integration-specific |
 | Pin layout or spatial anchoring | `fake-pin` and `multi-pin` | Check deterministic positions and overlap |
 | App composition / root chrome | `blank-canvas`, `fake-pin`, and `multi-pin` | All three DEBUG states |
 | Coordinate / transform work | `fake-pin` and `multi-pin`, before and after viewport change | Once pan/zoom exists; use `spatial-debugging` Skill |
 | Human feel / taste / interaction quality | scenario that exposes the change | Mechanical verify first, then `request_human_review` |
 | Non-UI / pure contract text | none required | Still avoid product/runtime vs tooling confusion |
 
-Supported scenario values: `blank-canvas`, `fake-pin`, `multi-pin`. Default is `blank-canvas`.
+Supported scenario values: `blank-canvas`, `fake-pin`, `multi-pin`, `ai-refine`. Default is `blank-canvas`.
 
 ## Manual loop
 

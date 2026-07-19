@@ -2,6 +2,7 @@ import PencilKit
 import SwiftUI
 
 struct PencilCanvas: UIViewRepresentable {
+    @Binding var drawing: PKDrawing
     let penFixture: PenFixture?
 #if DEBUG
     @EnvironmentObject private var agentSession: AgentInteractionSession
@@ -9,9 +10,9 @@ struct PencilCanvas: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
 #if DEBUG
-        Coordinator(session: agentSession)
+        Coordinator(drawing: $drawing, session: agentSession)
 #else
-        Coordinator()
+        Coordinator(drawing: $drawing)
 #endif
     }
 
@@ -49,20 +50,24 @@ struct PencilCanvas: UIViewRepresentable {
         weak var canvas: PKCanvasView?
         var toolPicker: PKToolPicker?
         var loadedFixtureName: String?
+        var drawing: Binding<PKDrawing>
 #if DEBUG
         var session: AgentInteractionSession
 
-        init(session: AgentInteractionSession) {
+        init(drawing: Binding<PKDrawing>, session: AgentInteractionSession) {
+            self.drawing = drawing
             self.session = session
             super.init()
         }
 #else
-        override init() {
+        init(drawing: Binding<PKDrawing>) {
+            self.drawing = drawing
             super.init()
         }
 #endif
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            drawing.wrappedValue = canvasView.drawing
 #if DEBUG
             Task { @MainActor in
                 session.handleDrawingChange(drawing: canvasView.drawing, canvasSize: canvasView.bounds.size)

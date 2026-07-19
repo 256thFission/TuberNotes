@@ -12,7 +12,12 @@ struct RootView: View {
 #if DEBUG
                 AgentRequestBanner(session: agentSession)
 #endif
-                SpatialCanvasView(pins: scenario.pins, penFixture: scenario.penFixture)
+                SpatialCanvasView(
+                    conversationLayers: scenario.conversationLayers,
+                    penFixture: scenario.penFixture,
+                    refinementClient: refinementClient,
+                    initialRefinementSelection: scenario.initialRefinementSelection
+                )
 #if DEBUG
                     .environmentObject(agentSession)
 #endif
@@ -29,10 +34,19 @@ struct RootView: View {
             }
         }
         .onAppear {
-            print("TuberNotes scenario=\(scenario.rawValue) pins=\(scenario.pins.count)")
+            print("TuberNotes scenario=\(scenario.rawValue) layers=\(scenario.conversationLayers.layers.count)")
 #if DEBUG
             agentSession.reload()
 #endif
         }
+    }
+
+    private var refinementClient: any DrawingRefinementClient {
+#if DEBUG
+        if scenario == .aiRefine {
+            return PreviewDrawingRefinementClient()
+        }
+#endif
+        return BackendDrawingRefinementClient()
     }
 }
