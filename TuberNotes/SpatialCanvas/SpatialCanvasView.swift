@@ -6,6 +6,7 @@ struct SpatialCanvasView: View {
     let penFixture: PenFixture?
     let refinementClient: any DrawingRefinementClient
     let initialRefinementSelection: CGRect?
+    @State private var layers: [ConversationLayer]
     @State private var selectedLayerID: UUID?
     @State private var drawing = PKDrawing()
 
@@ -19,6 +20,7 @@ struct SpatialCanvasView: View {
         self.penFixture = penFixture
         self.refinementClient = refinementClient
         self.initialRefinementSelection = initialRefinementSelection
+        _layers = State(initialValue: conversationLayers.layers)
         _selectedLayerID = State(initialValue: conversationLayers.layers.first?.id)
     }
 
@@ -27,7 +29,7 @@ struct SpatialCanvasView: View {
             NotebookPaper()
             PencilCanvas(drawing: $drawing, penFixture: penFixture)
             ConversationLayerOverlayView(
-                layers: conversationLayers.layers,
+                layers: $layers,
                 selectedLayerID: $selectedLayerID
             )
             DrawingRefinementOverlay(
