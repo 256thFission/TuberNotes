@@ -1,0 +1,3 @@
+// Shared signing config. Do not put personal team IDs here.
+#include? "Local.xcconfig"
+DEVELOPMENT_TEAM = $(DEV_TEAM)
