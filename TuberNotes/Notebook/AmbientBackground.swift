@@ -25,19 +25,20 @@ final class AmbientRippleModel: ObservableObject {
     @Published private(set) var ripples: [AmbientRipple] = []
     private var lastPoint: CGPoint = .zero
     private var lastTime: TimeInterval = -1
-    let lifetime: TimeInterval = 1.7
+    let lifetime: TimeInterval = 1.1
 
     func add(at point: CGPoint) {
         let now = AmbientClock.now
-        // Calm cadence: skip near-duplicate reports from the same touch stream.
-        if now - lastTime < 0.12, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < 40 {
+        // Fine cadence so a moving Pencil leaves a smooth, overlapping trail
+        // rather than discrete pops.
+        if now - lastTime < 0.035, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < 16 {
             return
         }
         lastPoint = point
         lastTime = now
         ripples.removeAll { now - $0.start > lifetime }
         ripples.append(AmbientRipple(center: point, start: now))
-        if ripples.count > 10 { ripples.removeFirst(ripples.count - 10) }
+        if ripples.count > 24 { ripples.removeFirst(ripples.count - 24) }
     }
 }
 
@@ -47,7 +48,7 @@ final class AmbientRippleModel: ObservableObject {
 struct AmbientBackground: View {
     @ObservedObject var rippleModel: AmbientRippleModel
 
-    private let lifetime: TimeInterval = 1.7
+    private let lifetime: TimeInterval = 1.1
 
     private struct Blob {
         let baseX, baseY, radius, driftX, driftY, driftSpeed, breathSpeed, phase, alpha: CGFloat
@@ -85,33 +86,31 @@ struct AmbientBackground: View {
                     }
                 }
 
-                // Ripples: soft, low-alpha expanding halos, blurred so they read
-                // as gentle disturbances *within* the ombré rather than rings.
+                // Ripples: soft blurred blooms with a smooth fade-in/out, spawned
+                // closely along the Pencil so they overlap into a fluid glow that
+                // melts into the ombré — no hard rings.
                 if !rippleModel.ripples.isEmpty {
                     ctx.drawLayer { layer in
-                        layer.addFilter(.blur(radius: 24))
+                        layer.addFilter(.blur(radius: 18))
                         for ripple in rippleModel.ripples {
                             let age = t - ripple.start
                             guard age >= 0, age <= lifetime else { continue }
                             let p = age / lifetime
-                            let rr = 14 + p * 190
-                            let maxR = rr + 48
-                            let ring = rr / maxR
-                            let band = 42 / maxR
-                            let alpha = (1 - p) * 0.08
-                            let stops = Gradient(stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .clear, location: max(0, ring - band)),
-                                .init(color: .white.opacity(alpha), location: ring),
-                                .init(color: .clear, location: min(1, ring + band)),
-                                .init(color: .clear, location: 1),
-                            ])
-                            let rect = CGRect(x: ripple.center.x - maxR, y: ripple.center.y - maxR,
-                                              width: maxR * 2, height: maxR * 2)
+                            let radius = 44 + CGFloat(p) * 70
+                            let env = sin(p * .pi)          // smooth 0 → 1 → 0
+                            let alpha = 0.06 * env
+                            let rect = CGRect(x: ripple.center.x - radius, y: ripple.center.y - radius,
+                                              width: radius * 2, height: radius * 2)
                             layer.fill(
                                 Path(ellipseIn: rect),
-                                with: .radialGradient(stops, center: ripple.center,
-                                                      startRadius: 0, endRadius: maxR)
+                                with: .radialGradient(
+                                    Gradient(colors: [
+                                        .white.opacity(alpha),
+                                        .white.opacity(alpha * 0.35),
+                                        .clear,
+                                    ]),
+                                    center: ripple.center, startRadius: 0, endRadius: radius
+                                )
                             )
                         }
                     }

@@ -29,7 +29,8 @@ struct NotebookCanvas: UIViewRepresentable {
     var onLassoChanged: (CGRect?) -> Void
     var onImagesChanged: ([PlacedImage]) -> Void
     var onSelectImage: (UUID?) -> Void
-    var onFlip: (Int) -> Void   // +1 = next page, -1 = previous
+    var onFlipChanged: (CGFloat) -> Void   // live horizontal finger translation
+    var onFlipEnded: (CGFloat, CGFloat) -> Void   // final translation, velocity
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -63,18 +64,21 @@ struct NotebookCanvas: UIViewRepresentable {
         longPress.delegate = context.coordinator
         view.scrollView.addGestureRecognizer(longPress)
 
-        // Finger swipe left/right flips pages (only at base zoom — see the
-        // gesture delegate — so it never fights panning a zoomed-in page).
+        // Pencil must never scroll the page — only draw. Restrict the scroll
+        // view's pan to finger touches (in both finger-drawing modes).
         let fingerOnly = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
-        for direction in [UISwipeGestureRecognizer.Direction.left, .right] {
-            let swipe = UISwipeGestureRecognizer(
-                target: context.coordinator, action: #selector(Coordinator.handleFlipSwipe(_:))
-            )
-            swipe.direction = direction
-            swipe.allowedTouchTypes = fingerOnly
-            swipe.delegate = context.coordinator
-            view.scrollView.addGestureRecognizer(swipe)
-        }
+        view.scrollView.panGestureRecognizer.allowedTouchTypes = fingerOnly
+
+        // Finger horizontal drag interactively slides between pages (GoodNotes
+        // style). Finger only; gated to base zoom + horizontal in the delegate.
+        let flipPan = UIPanGestureRecognizer(
+            target: context.coordinator, action: #selector(Coordinator.handleFlipPan(_:))
+        )
+        flipPan.allowedTouchTypes = fingerOnly
+        flipPan.maximumNumberOfTouches = 1
+        flipPan.delegate = context.coordinator
+        view.scrollView.addGestureRecognizer(flipPan)
+        context.coordinator.flipPan = flipPan
 
         applyMode(to: view)
         context.coordinator.load(drawingData, pageID: pageID, into: view)
@@ -133,6 +137,7 @@ struct NotebookCanvas: UIViewRepresentable {
     final class Coordinator: NSObject, PKCanvasViewDelegate, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         var parent: NotebookCanvas
         weak var view: ZoomablePageView?
+        weak var flipPan: UIPanGestureRecognizer?
         private(set) var loadedPageID: UUID?
         var isUserZooming = false     // set while a pinch is in flight
         var isSyncingZoom = false     // suppresses the binding echo after a zoom
@@ -314,23 +319,34 @@ struct NotebookCanvas: UIViewRepresentable {
             if gr.state == .began { parent.onLongPress() }
         }
 
-        @objc func handleFlipSwipe(_ gr: UISwipeGestureRecognizer) {
-            guard gr.state == .ended else { return }
-            // Swipe left → next page, swipe right → previous page.
-            parent.onFlip(gr.direction == .left ? 1 : -1)
+        @objc func handleFlipPan(_ gr: UIPanGestureRecognizer) {
+            // Measure against the window so our own SwiftUI offset of the page
+            // (driven by these callbacks) can't feed back into the translation.
+            let ref = gr.view?.window
+            let tx = gr.translation(in: ref).x
+            switch gr.state {
+            case .began, .changed:
+                parent.onFlipChanged(tx)
+            case .ended:
+                parent.onFlipEnded(tx, gr.velocity(in: ref).x)
+            case .cancelled, .failed:
+                parent.onFlipEnded(tx, 0)
+            default:
+                break
+            }
         }
 
-        /// Only let the page-flip swipe start when the page is at (about) base
-        /// zoom and we're not lassoing / arranging / finger-drawing — otherwise a
-        /// horizontal drag should pan or draw, not flip.
+        /// Let the flip pan begin only when the page fits the screen (≤100%),
+        /// the gesture is horizontal-dominant, and we're not lassoing / arranging
+        /// / finger-drawing — otherwise a drag should pan, scroll, or draw.
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard g is UISwipeGestureRecognizer else { return true }
+            guard let pan = g as? UIPanGestureRecognizer, pan === flipPan else { return true }
             guard let scrollView = view?.scrollView else { return false }
-            // Allow flipping only when the page fits the screen (zoomed out to
-            // 100% or less); when zoomed in, a horizontal drag should pan.
             let fitsScreen = scrollView.zoomScale <= 1.0 + 0.02
             let interacting = parent.isLassoActive || parent.isArrangingImages || parent.fingerDrawing
-            return fitsScreen && !interacting
+            guard fitsScreen, !interacting else { return false }
+            let v = pan.velocity(in: pan.view)
+            return abs(v.x) > abs(v.y) * 1.2
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }

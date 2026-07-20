@@ -18,6 +18,13 @@ struct NotebookView: View {
     @State private var exportItem: ExportItem?
     @StateObject private var rippleModel = AmbientRippleModel()
 
+    // Interactive page-flip state.
+    @State private var flipDX: CGFloat = 0
+    @State private var isFlipAnimating = false
+    @State private var containerWidth: CGFloat = 1024
+
+    private let sidebarShift: CGFloat = 348
+
     init(notebook: Notebook, store: NotebookStore) {
         _vm = StateObject(wrappedValue: NotebookViewModel(notebook: notebook, store: store))
     }
@@ -39,6 +46,7 @@ struct NotebookView: View {
                 }
                 pageArea
             }
+            .padding(.trailing, showSidebar ? sidebarShift : 0)
 
             // Assistant floats OVER the page (doesn't shrink it).
             if showSidebar {
@@ -197,17 +205,66 @@ struct NotebookView: View {
             onLassoChanged: { vm.lassoRect = $0 },
             onImagesChanged: { vm.updateImages($0) },
             onSelectImage: { vm.selectImage($0) },
-            onFlip: { direction in
-                withAnimation(.easeInOut) {
-                    if direction > 0 { vm.goForward() } else { vm.goBack() }
-                }
-            }
+            onFlipChanged: { tx in handleFlipChanged(tx) },
+            onFlipEnded: { tx, vx in handleFlipEnded(tx, vx) }
         )
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 74)
-        .id(vm.currentPageID)
+        .offset(x: flipDX)
+        .background(
+            GeometryReader { geo in
+                Color.clear.onAppear { containerWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, w in containerWidth = w }
+            }
+        )
         .accessibilityIdentifier("notebook-page-area")
+    }
+
+    // MARK: Interactive page flip
+
+    private func handleFlipChanged(_ tx: CGFloat) {
+        guard !isFlipAnimating else { return }
+        var d = tx
+        // Rubber-band when there's no page to flip to in that direction.
+        if (d < 0 && !vm.canGoForward) || (d > 0 && !vm.canGoBack) {
+            d *= 0.28
+        }
+        flipDX = d
+    }
+
+    private func handleFlipEnded(_ tx: CGFloat, _ vx: CGFloat) {
+        guard !isFlipAnimating else { return }
+        let width = max(containerWidth, 320)
+        let threshold = width * 0.28
+        let goNext = (tx < -threshold || vx < -800) && vm.canGoForward
+        let goPrev = (tx > threshold || vx > 800) && vm.canGoBack
+
+        if goNext {
+            completeFlip(next: true, width: width)
+        } else if goPrev {
+            completeFlip(next: false, width: width)
+        } else {
+            withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.82)) { flipDX = 0 }
+        }
+    }
+
+    /// Slide the current page out in the drag direction, swap, then slide the
+    /// new page in from the opposite side — a tactile turn rather than a fade.
+    private func completeFlip(next: Bool, width: CGFloat) {
+        isFlipAnimating = true
+        withAnimation(.easeOut(duration: 0.18)) { flipDX = next ? -width : width }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            if next { vm.goForward() } else { vm.goBack() }
+            flipDX = next ? width : -width          // pre-position new page off-screen
+            DispatchQueue.main.async {
+                withAnimation(.easeOut(duration: 0.20)) { flipDX = 0 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                    isFlipAnimating = false
+                }
+            }
+        }
     }
 }
 
