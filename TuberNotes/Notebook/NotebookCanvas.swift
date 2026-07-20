@@ -29,6 +29,7 @@ struct NotebookCanvas: UIViewRepresentable {
     var onLassoChanged: (CGRect?) -> Void
     var onImagesChanged: ([PlacedImage]) -> Void
     var onSelectImage: (UUID?) -> Void
+    var onFlip: (Int) -> Void   // +1 = next page, -1 = previous
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -62,6 +63,19 @@ struct NotebookCanvas: UIViewRepresentable {
         longPress.delegate = context.coordinator
         view.scrollView.addGestureRecognizer(longPress)
 
+        // Finger swipe left/right flips pages (only at base zoom — see the
+        // gesture delegate — so it never fights panning a zoomed-in page).
+        let fingerOnly = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        for direction in [UISwipeGestureRecognizer.Direction.left, .right] {
+            let swipe = UISwipeGestureRecognizer(
+                target: context.coordinator, action: #selector(Coordinator.handleFlipSwipe(_:))
+            )
+            swipe.direction = direction
+            swipe.allowedTouchTypes = fingerOnly
+            swipe.delegate = context.coordinator
+            view.scrollView.addGestureRecognizer(swipe)
+        }
+
         applyMode(to: view)
         context.coordinator.load(drawingData, pageID: pageID, into: view)
         view.scrollView.setZoomScale(zoomScale, animated: false)
@@ -84,8 +98,17 @@ struct NotebookCanvas: UIViewRepresentable {
         if context.coordinator.loadedPageID != pageID {
             context.coordinator.load(drawingData, pageID: pageID, into: view)
         }
-        if abs(view.scrollView.zoomScale - zoomScale) > 0.001 {
-            view.scrollView.setZoomScale(zoomScale, animated: true)
+        // Only push a zoom change to the scroll view when it came from *outside*
+        // the scroll view (the − / % / + buttons). While the user is pinching —
+        // or right after, when our own onZoomChanged echoes back through the
+        // binding — we must not re-set the scale, or it fights the gesture and
+        // jitters. `isSyncingZoom` suppresses that echo.
+        let c = context.coordinator
+        if !c.isUserZooming, !c.isSyncingZoom,
+           abs(view.scrollView.zoomScale - zoomScale) > 0.001 {
+            c.isSyncingZoom = true
+            view.scrollView.setZoomScale(zoomScale, animated: false)
+            DispatchQueue.main.async { c.isSyncingZoom = false }
         }
     }
 
@@ -111,6 +134,8 @@ struct NotebookCanvas: UIViewRepresentable {
         var parent: NotebookCanvas
         weak var view: ZoomablePageView?
         private(set) var loadedPageID: UUID?
+        var isUserZooming = false     // set while a pinch is in flight
+        var isSyncingZoom = false     // suppresses the binding echo after a zoom
         private var isLoading = false
         private var isProgrammatic = false
         private var lassoSelection: [Int] = []
@@ -269,13 +294,43 @@ struct NotebookCanvas: UIViewRepresentable {
         // MARK: Zoom
 
         func viewForZooming(in scrollView: UIScrollView) -> UIView? { view?.contentView }
+
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            isUserZooming = true
+        }
+
         func scrollViewDidZoom(_ scrollView: UIScrollView) { view?.recenter() }
+
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            isUserZooming = false
+            // Report the final scale, but mark it as our own so the resulting
+            // binding update doesn't bounce back into setZoomScale.
+            isSyncingZoom = true
             parent.onZoomChanged(scale)
+            DispatchQueue.main.async { self.isSyncingZoom = false }
         }
 
         @objc func longPress(_ gr: UILongPressGestureRecognizer) {
             if gr.state == .began { parent.onLongPress() }
+        }
+
+        @objc func handleFlipSwipe(_ gr: UISwipeGestureRecognizer) {
+            guard gr.state == .ended else { return }
+            // Swipe left → next page, swipe right → previous page.
+            parent.onFlip(gr.direction == .left ? 1 : -1)
+        }
+
+        /// Only let the page-flip swipe start when the page is at (about) base
+        /// zoom and we're not lassoing / arranging / finger-drawing — otherwise a
+        /// horizontal drag should pan or draw, not flip.
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard g is UISwipeGestureRecognizer else { return true }
+            guard let scrollView = view?.scrollView else { return false }
+            // Allow flipping only when the page fits the screen (zoomed out to
+            // 100% or less); when zoomed in, a horizontal drag should pan.
+            let fitsScreen = scrollView.zoomScale <= 1.0 + 0.02
+            let interacting = parent.isLassoActive || parent.isArrangingImages || parent.fingerDrawing
+            return fitsScreen && !interacting
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
@@ -699,6 +754,25 @@ final class PaperSheetView: UIView {
         guard template.spacing > 0 else { return }
         let spacing = template.spacing
         let lineColor = UIColor(red: 0.62, green: 0.72, blue: 0.88, alpha: 0.55)
+
+        // Dotted grid: a small filled dot at each grid intersection.
+        if template.isDotted {
+            let dotColor = UIColor(red: 0.55, green: 0.64, blue: 0.80, alpha: 0.75)
+            ctx.setFillColor(dotColor.cgColor)
+            let radius: CGFloat = spacing >= 40 ? 1.7 : (spacing >= 30 ? 1.5 : 1.3)
+            var y = spacing
+            while y < bounds.height {
+                var x = spacing
+                while x < bounds.width {
+                    ctx.fillEllipse(in: CGRect(x: x - radius, y: y - radius,
+                                               width: radius * 2, height: radius * 2))
+                    x += spacing
+                }
+                y += spacing
+            }
+            return
+        }
+
         ctx.setStrokeColor(lineColor.cgColor)
         ctx.setLineWidth(1)
 

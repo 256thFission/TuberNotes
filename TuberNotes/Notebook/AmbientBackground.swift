@@ -203,7 +203,10 @@ final class PassiveTouchRecognizer: UIGestureRecognizer {
     }
 
     private func report(_ touches: Set<UITouch>) {
-        guard let referenceView, let touch = touches.first else { return }
+        guard let referenceView else { return }
+        // Pencil-only: finger touches are for scrolling/flipping and must not
+        // spawn ripples. A Pencil touch does (it isn't used to scroll).
+        guard let touch = touches.first(where: { $0.type == .pencil }) else { return }
         onTouch?(touch.location(in: referenceView))
     }
 }

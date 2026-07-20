@@ -196,7 +196,12 @@ struct NotebookView: View {
             onZoomChanged: { vm.zoomScale = $0 },
             onLassoChanged: { vm.lassoRect = $0 },
             onImagesChanged: { vm.updateImages($0) },
-            onSelectImage: { vm.selectImage($0) }
+            onSelectImage: { vm.selectImage($0) },
+            onFlip: { direction in
+                withAnimation(.easeInOut) {
+                    if direction > 0 { vm.goForward() } else { vm.goBack() }
+                }
+            }
         )
         .padding(.horizontal, 12)
         .padding(.top, 8)
