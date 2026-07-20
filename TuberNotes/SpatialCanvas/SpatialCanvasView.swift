@@ -1,14 +1,42 @@
+import PencilKit
 import SwiftUI
 
 struct SpatialCanvasView: View {
-    let pins: [Pin]
+    let conversationLayers: NoteConversationLayers
     let penFixture: PenFixture?
+    let refinementClient: any DrawingRefinementClient
+    let initialRefinementSelection: CGRect?
+    @State private var layers: [ConversationLayer]
+    @State private var selectedLayerID: UUID?
+    @State private var drawing = PKDrawing()
+
+    init(
+        conversationLayers: NoteConversationLayers,
+        penFixture: PenFixture?,
+        refinementClient: any DrawingRefinementClient,
+        initialRefinementSelection: CGRect? = nil
+    ) {
+        self.conversationLayers = conversationLayers
+        self.penFixture = penFixture
+        self.refinementClient = refinementClient
+        self.initialRefinementSelection = initialRefinementSelection
+        _layers = State(initialValue: conversationLayers.layers)
+        _selectedLayerID = State(initialValue: conversationLayers.layers.first?.id)
+    }
 
     var body: some View {
         ZStack {
             NotebookPaper()
-            PencilCanvas(penFixture: penFixture)
-            PinOverlayView(pins: pins)
+            PencilCanvas(drawing: $drawing, penFixture: penFixture)
+            ConversationLayerOverlayView(
+                layers: $layers,
+                selectedLayerID: $selectedLayerID
+            )
+            DrawingRefinementOverlay(
+                drawing: drawing,
+                client: refinementClient,
+                initialSelection: initialRefinementSelection
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay {
@@ -34,4 +62,3 @@ private struct NotebookPaper: View {
         }
     }
 }
-

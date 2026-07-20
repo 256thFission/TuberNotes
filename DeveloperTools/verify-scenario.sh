@@ -19,12 +19,12 @@ APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/TuberNotes.app"
 SCENARIO="${1:-blank-canvas}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 case "$SCENARIO" in
-  blank-canvas|fake-pin|multi-pin) ;;
+  blank-canvas|fake-pin|multi-pin|ai-refine) ;;
   -h|--help)
     cat <<EOF
 Usage: DeveloperTools/verify-scenario.sh [scenario]
 
-Scenarios: blank-canvas (default), fake-pin, multi-pin
+Scenarios: blank-canvas (default), fake-pin, multi-pin, ai-refine
 
 Environment:
   SKIP_BUILD=1     Reuse existing DerivedData build
@@ -33,7 +33,7 @@ EOF
     exit 0
     ;;
   *)
-    echo "FAIL: unknown scenario '$SCENARIO' (expected blank-canvas|fake-pin|multi-pin)" >&2
+    echo "FAIL: unknown scenario '$SCENARIO' (expected blank-canvas|fake-pin|multi-pin|ai-refine)" >&2
     exit 2
     ;;
 esac
