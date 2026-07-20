@@ -16,6 +16,7 @@ struct NotebookView: View {
     @State private var showKeyPopup = false
     @State private var isPageLocked = false
     @State private var exportItem: ExportItem?
+    @StateObject private var rippleModel = AmbientRippleModel()
 
     init(notebook: Notebook, store: NotebookStore) {
         _vm = StateObject(wrappedValue: NotebookViewModel(notebook: notebook, store: store))
@@ -23,7 +24,7 @@ struct NotebookView: View {
 
     var body: some View {
         ZStack {
-            AmbientBackground()
+            AmbientBackground(rippleModel: rippleModel)
 
             VStack(spacing: 0) {
                 if showStrip {
@@ -32,6 +33,14 @@ struct NotebookView: View {
                 }
                 pageArea
             }
+
+            // Passthrough observer: feeds ripples from touches over the page
+            // (finger or Pencil) without intercepting them. Sits above the page
+            // but below the chrome, so buttons/sidebar don't spawn ripples.
+            AmbientTouchLayer { point in rippleModel.add(at: point) }
+                .ignoresSafeArea()
+                .allowsHitTesting(true)
+                .zIndex(1)
 
             // Assistant floats OVER the page (doesn't shrink it).
             if showSidebar {
