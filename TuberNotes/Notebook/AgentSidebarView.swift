@@ -5,7 +5,11 @@ import SwiftUI
 struct AgentSidebarView: View {
     @ObservedObject var vm: NotebookViewModel
     @AppStorage("tuber.openaiKey") private var apiKey = ""
+    @AppStorage("tuber.provider") private var providerRaw = AgentProvider.openAI.rawValue
+    @AppStorage("tuber.model") private var model = ""
     @State private var prompt = ""
+
+    private var provider: AgentProvider { AgentProvider(rawValue: providerRaw) ?? .openAI }
     var onClose: () -> Void
     var onEditKey: () -> Void
 
@@ -61,7 +65,7 @@ struct AgentSidebarView: View {
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.12)))
 
         Button {
-            vm.analyzeCurrentPage(apiKey: apiKey, question: prompt.isEmpty ? nil : prompt)
+            vm.analyzeCurrentPage(apiKey: apiKey, provider: provider, model: model, question: prompt.isEmpty ? nil : prompt)
         } label: {
             Label(analyzeTitle, systemImage: hasSelection ? "lasso" : "eye")
                 .frame(maxWidth: .infinity)
@@ -174,10 +178,18 @@ private struct ObservationCard: View {
 /// editor so it sits in the middle of the screen.
 struct APIKeyPopup: View {
     @AppStorage("tuber.openaiKey") private var apiKey = ""
+    @AppStorage("tuber.provider") private var providerRaw = AgentProvider.openAI.rawValue
+    @AppStorage("tuber.model") private var model = ""
     @State private var draft = ""
     var onClose: () -> Void
 
     private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var provider: AgentProvider { AgentProvider(rawValue: providerRaw) ?? .openAI }
+    private var modelLabel: String {
+        model.trimmingCharacters(in: .whitespaces).isEmpty
+            ? "Default (\(provider.defaultModel))"
+            : model
+    }
 
     var body: some View {
         ZStack {
@@ -187,20 +199,51 @@ struct APIKeyPopup: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Label("OpenAI API key", systemImage: "key.fill").font(.headline)
+                    Label("API key", systemImage: "key.fill").font(.headline)
                     Spacer()
                     Button { onClose() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Close")
                 }
 
-                Text("Paste a key to enable real analysis. It's stored on-device only — for a shipped app, proxy requests through your own server instead.")
+                Picker("Provider", selection: $providerRaw) {
+                    ForEach(AgentProvider.allCases) { p in
+                        Text(p.label).tag(p.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: providerRaw) { _, _ in model = "" }
+
+                Text(provider == .rightCode
+                     ? "Paste your right.codes key (uses the \(provider.defaultModel) Codex model). Stored on-device only."
+                     : "Paste an OpenAI-compatible key to enable real analysis. Stored on-device only — for a shipped app, proxy through your own server instead.")
                     .font(.footnote).foregroundStyle(.secondary)
 
-                SecureField("sk-…", text: $draft)
+                SecureField(provider == .rightCode ? "right.codes key…" : "sk-…", text: $draft)
                     .textFieldStyle(.plain)
                     .padding(12)
                     .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.14)))
+
+                HStack {
+                    Text("Model").font(.subheadline)
+                    Spacer()
+                    Menu {
+                        Button("Default (\(provider.defaultModel))") { model = "" }
+                        Divider()
+                        ForEach(provider.knownModels, id: \.self) { m in
+                            Button(m) { model = m }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(modelLabel).lineLimit(1)
+                            Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.14)))
+                    }
+                    .accessibilityIdentifier("model-picker")
+                }
 
                 HStack {
                     if !apiKey.isEmpty {

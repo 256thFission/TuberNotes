@@ -409,7 +409,7 @@ final class NotebookViewModel: ObservableObject {
         return SpatialSelection(pageID: currentPageID, normalizedBounds: normalized, imageData: data)
     }
 
-    func analyzeCurrentPage(apiKey: String, question: String? = nil) {
+    func analyzeCurrentPage(apiKey: String, provider: AgentProvider = .openAI, model: String? = nil, question: String? = nil) {
         guard !isAnalyzing else { return }
         guard let selection = makeSelectionSnapshot() else {
             agentError = "Draw or circle something first, then analyze."
@@ -418,7 +418,7 @@ final class NotebookViewModel: ObservableObject {
         let thumbnail = UIImage(data: selection.imageData)
         isAnalyzing = true
         agentError = nil
-        let client = AgentClientFactory.make(apiKey: apiKey)
+        let client = AgentClientFactory.make(apiKey: apiKey, provider: provider, model: model)
 
         Task { [weak self] in
             do {
