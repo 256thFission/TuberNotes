@@ -39,6 +39,9 @@
 		A0000000000000000000001E /* GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011E /* GlassStyle.swift */; };
 		A0000000000000000000001F /* PageStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011F /* PageStripView.swift */; };
 		A00000000000000000000020 /* PageTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000120 /* PageTemplate.swift */; };
+		A00000000000000000000021 /* NotebookUndoBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000121 /* NotebookUndoBridge.swift */; };
+		A00000000000000000000022 /* PencilInteractionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000122 /* PencilInteractionController.swift */; };
+		A00000000000000000000023 /* PencilShortcutPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000123 /* PencilShortcutPalette.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -75,6 +78,10 @@
 		A0000000000000000000011E /* GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassStyle.swift; sourceTree = "<group>"; };
 		A0000000000000000000011F /* PageStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageStripView.swift; sourceTree = "<group>"; };
 		A00000000000000000000120 /* PageTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageTemplate.swift; sourceTree = "<group>"; };
+		A00000000000000000000121 /* NotebookUndoBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookUndoBridge.swift; sourceTree = "<group>"; };
+		A00000000000000000000122 /* PencilInteractionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilInteractionController.swift; sourceTree = "<group>"; };
+		A00000000000000000000123 /* PencilShortcutPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilShortcutPalette.swift; sourceTree = "<group>"; };
+		A00000000000000000000124 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +106,7 @@
 		A00000000000000000000202 /* TuberNotes */ = {
 			isa = PBXGroup;
 			children = (
+				A00000000000000000000124 /* Config.xcconfig */,
 				A00000000000000000000203 /* App */,
 				A00000000000000000000204 /* SpatialCanvas */,
 				A00000000000000000000205 /* Pins */,
@@ -191,6 +199,9 @@
 				A00000000000000000000118 /* NotebookToolbar.swift */,
 				A00000000000000000000119 /* NotebookView.swift */,
 				A0000000000000000000011A /* NotebookViewModel.swift */,
+				A00000000000000000000123 /* PencilShortcutPalette.swift */,
+				A00000000000000000000122 /* PencilInteractionController.swift */,
+				A00000000000000000000121 /* NotebookUndoBridge.swift */,
 				A0000000000000000000011B /* PageFlipOverlay.swift */,
 				A0000000000000000000011F /* PageStripView.swift */,
 				A00000000000000000000120 /* PageTemplate.swift */,
@@ -293,6 +304,9 @@
 				A00000000000000000000018 /* NotebookToolbar.swift in Sources */,
 				A00000000000000000000019 /* NotebookView.swift in Sources */,
 				A0000000000000000000001A /* NotebookViewModel.swift in Sources */,
+				A00000000000000000000023 /* PencilShortcutPalette.swift in Sources */,
+				A00000000000000000000022 /* PencilInteractionController.swift in Sources */,
+				A00000000000000000000021 /* NotebookUndoBridge.swift in Sources */,
 				A0000000000000000000001B /* PageFlipOverlay.swift in Sources */,
 				A0000000000000000000001C /* AgentInsight.swift in Sources */,
 				A0000000000000000000001D /* AgentSidebarView.swift in Sources */,
@@ -320,7 +334,7 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -338,7 +352,7 @@
 				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = gnu17;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -348,11 +362,12 @@
 		};
 		A00000000000000000000703 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A00000000000000000000124 /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 632Q9LT7K2;
+				DEVELOPMENT_TEAM = 8UR4G77744;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = TuberNotes;
 				INFOPLIST_KEY_TuberRefinementEndpoint = "";
@@ -361,7 +376,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.claire.tubernotes.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -376,11 +391,12 @@
 		};
 		A00000000000000000000704 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A00000000000000000000124 /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 632Q9LT7K2;
+				DEVELOPMENT_TEAM = 8UR4G77744;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = TuberNotes;
 				INFOPLIST_KEY_TuberRefinementEndpoint = "";
@@ -389,7 +405,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.claire.tubernotes.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";

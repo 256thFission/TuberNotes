@@ -8,3 +8,4 @@ DeveloperTools/PencilFixtureMCP/.venv/
 DeveloperTools/PencilFixtureMCP/__pycache__/
 tmp/
 TuberNotes.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+TuberNotes/Local.xcconfig
