@@ -18,8 +18,17 @@ final class NotebookViewModel: ObservableObject {
     @Published var notebook: Notebook
     @Published var currentIndex: Int = 0
 
-    // Tool state
-    @Published var tool: WritingTool = .pen
+    // Undo/redo. Owned here (not by the canvas) because `NotebookView` gives the
+    // canvas `.id(currentPageID)`, so the representable dies on every page turn.
+    let undo = NotebookUndoBridge()
+
+    // Tool state.
+    // `previousTool` hangs off `didSet` rather than `selectTool(_:)` because
+    // `NotebookToolbar` assigns `vm.tool` directly in a couple of places.
+    @Published var tool: WritingTool = .pen {
+        didSet { if oldValue != tool { previousTool = oldValue } }
+    }
+    @Published private(set) var previousTool: WritingTool = .pen
     @Published var inkColorHex: String = InkPalette.default
     @Published var penWidth: CGFloat = WritingTool.pen.defaultWidth
     @Published var pencilWidth: CGFloat = WritingTool.pencil.defaultWidth
@@ -90,6 +99,27 @@ final class NotebookViewModel: ObservableObject {
 
     func selectTool(_ newTool: WritingTool) {
         tool = newTool
+        isLassoActive = false
+        isArrangingImages = false
+    }
+
+    /// Apple Pencil Pro double-tap: flip between the eraser and whatever was in
+    /// hand before it.
+    func togglePencilEraser() {
+        if tool == .eraser {
+            tool = previousTool == .eraser ? .pen : previousTool
+        } else {
+            tool = .eraser
+        }
+        isLassoActive = false
+        isArrangingImages = false
+    }
+
+    /// Apple Pencil Pro double-tap with "switch to previous tool" selected in
+    /// Settings — an unconditional swap.
+    func swapToPreviousTool() {
+        guard previousTool != tool else { return }
+        tool = previousTool
         isLassoActive = false
         isArrangingImages = false
     }

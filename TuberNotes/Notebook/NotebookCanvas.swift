@@ -23,7 +23,19 @@ struct NotebookCanvas: UIViewRepresentable {
     let images: [PlacedImage]
     let isArrangingImages: Bool
     let selectedImageID: UUID?
+    let undo: NotebookUndoBridge
+    let pencilDoubleTapEnabled: Bool
+    let pencilSqueezeEnabled: Bool
+    let pencilHoverPreviewEnabled: Bool
     var onChange: (Data) -> Void
+    /// Pencil Pro double-tap, when Settings' preferred action is "switch eraser".
+    var onPencilToggleEraser: () -> Void
+    /// Pencil Pro double-tap, when the preferred action is "switch to previous".
+    var onPencilSwapTool: () -> Void
+    /// Show the shortcut palette. The point is in **screen (global) space** so
+    /// `NotebookView` can place it without knowing this view's padding or
+    /// whether the page strip is showing.
+    var onPencilShowPalette: (CGPoint, Bool) -> Void
     var onLongPress: () -> Void
     var onZoomChanged: (CGFloat) -> Void
     var onLassoChanged: (CGRect?) -> Void
@@ -54,6 +66,35 @@ struct NotebookCanvas: UIViewRepresentable {
             c?.straighten(from: start, to: end, in: view)
         }
 
+        view.hoverRecognizer.addTarget(context.coordinator, action: #selector(Coordinator.hover(_:)))
+
+        let pencil = view.pencilController
+        pencil.onToggleEraser = { [weak c] in c?.parent.onPencilToggleEraser() }
+        pencil.onSwapPreviousTool = { [weak c] in c?.parent.onPencilSwapTool() }
+        pencil.onShowColorPalette = { [weak c, weak view] point in
+            guard let c, let view else { return }
+            c.parent.onPencilShowPalette(view.convertToScreen(point), true)
+        }
+        pencil.onSqueeze = { [weak c, weak view] point in
+            guard let c, let view else { return }
+            // The Pencil-side squeeze haptic is system-provided and has already
+            // fired by now; this is the on-device confirmation that the app
+            // acted. `UICanvasFeedbackGenerator` has no squeeze-appropriate
+            // semantic — `alignmentOccurred` would be a lie — so it's a plain
+            // light impact, matching `NotebookToolbar`.
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            c.parent.onPencilShowPalette(view.convertToScreen(point), false)
+        }
+        // `hoverPose` is nil when the pencil isn't in hover range, and always nil
+        // on pre-M2 iPads — fall back to the last hover point, then the center.
+        pencil.fallbackPoint = { [weak c, weak view] in
+            guard let view else { return .zero }
+            if let last = c?.lastHoverPoint {
+                return view.contentView.convert(last, to: view)
+            }
+            return CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        }
+
         let longPress = UILongPressGestureRecognizer(
             target: context.coordinator, action: #selector(Coordinator.longPress(_:))
         )
@@ -61,6 +102,10 @@ struct NotebookCanvas: UIViewRepresentable {
         longPress.cancelsTouchesInView = false
         longPress.delegate = context.coordinator
         view.scrollView.addGestureRecognizer(longPress)
+
+        // Must be set before `load`, which brackets its programmatic drawing
+        // assignment in the bridge's undo registration.
+        view.undoBridge = undo
 
         applyMode(to: view)
         context.coordinator.load(drawingData, pageID: pageID, into: view)
@@ -105,6 +150,15 @@ struct NotebookCanvas: UIViewRepresentable {
 
         view.straightenRecognizer.acceptsFinger = fingerDrawing
         view.straightenRecognizer.isEnabled = snapStraight && !interacting && tool != .eraser
+
+        view.pencilController.isDoubleTapEnabled = pencilDoubleTapEnabled
+        view.pencilController.isSqueezeEnabled = pencilSqueezeEnabled
+
+        let wantsHover = pencilHoverPreviewEnabled
+            && PencilInteractionController.prefersHoverPreview
+            && !interacting
+        view.hoverRecognizer.isEnabled = wantsHover
+        if !wantsHover { view.hoverPreview.hide() }
     }
 
     final class Coordinator: NSObject, PKCanvasViewDelegate, UIScrollViewDelegate, UIGestureRecognizerDelegate {
@@ -116,21 +170,85 @@ struct NotebookCanvas: UIViewRepresentable {
         private var lassoSelection: [Int] = []
         private var movingStrokes: [PKStroke] = []
         private var moveTranslation: CGPoint = .zero
+        private var preMoveDrawing: PKDrawing?
+        /// Last hover location, in page (`contentView`) space. Used as the
+        /// palette anchor when the pencil isn't hovering.
+        private(set) var lastHoverPoint: CGPoint?
 
         init(_ parent: NotebookCanvas) { self.parent = parent }
 
         func load(_ data: Data, pageID: UUID, into view: ZoomablePageView) {
             self.view = view
             isLoading = true
-            view.canvasView.drawing = (try? PKDrawing(data: data)) ?? PKDrawing()
+            // Undo stacks are per-page, which falls out for free: `NotebookView`
+            // gives the canvas `.id(currentPageID)`, so a page turn rebuilds
+            // this coordinator anyway.
+            parent.undo.withoutRegistration {
+                view.canvasView.drawing = (try? PKDrawing(data: data)) ?? PKDrawing()
+            }
+            parent.undo.reset()
             loadedPageID = pageID
             lassoSelection = []
             DispatchQueue.main.async { self.isLoading = false }
         }
 
+        /// Assigns `drawing` as a single undoable action. The undo block assigns
+        /// `drawing` itself, so it has to register its redo exactly the same
+        /// way — hence the symmetric bracketing on both sides.
+        func applyDrawing(_ new: PKDrawing, to view: ZoomablePageView, actionName: String) {
+            let old = view.canvasView.drawing
+            let undo = parent.undo
+
+            undo.withoutRegistration {
+                isProgrammatic = true
+                view.canvasView.drawing = new
+                isProgrammatic = false
+            }
+
+            undo.manager.registerUndo(withTarget: self) { target in
+                target.applyDrawing(old, to: view, actionName: actionName)
+            }
+            undo.manager.setActionName(actionName)
+            parent.onChange(new.dataRepresentation())
+        }
+
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             guard !isLoading, !isProgrammatic else { return }
             parent.onChange(canvasView.drawing.dataRepresentation())
+        }
+
+        // MARK: Tool lifecycle
+
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            // A hover dot under an actively drawing tip is just a smudge.
+            view?.hoverPreview.hide()
+            view?.alignmentFeedback.prepare()
+        }
+
+        func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {}
+
+        // MARK: Hover
+
+        @objc func hover(_ gr: UIHoverGestureRecognizer) {
+            guard let view else { return }
+            switch gr.state {
+            case .began, .changed:
+                // `UIHoverGestureRecognizer` also fires for trackpad and mouse
+                // pointers, and there's no documented way to ask it what's
+                // hovering. A pointer reports zOffset 0; a hovering pencil
+                // reports a positive normalized distance, so this is the
+                // available discriminator.
+                guard gr.zOffset > 0 else { view.hoverPreview.hide(); return }
+                let p = gr.location(in: view.contentView)
+                lastHoverPoint = p
+                view.hoverPreview.show(
+                    at: p, tool: parent.tool, color: parent.color, width: parent.width
+                )
+            case .ended, .cancelled, .failed:
+                view.hoverPreview.hide()
+            default:
+                break
+            }
         }
 
         // MARK: Lasso (select + move)
@@ -179,9 +297,14 @@ struct NotebookCanvas: UIViewRepresentable {
             remaining.strokes = drawing.strokes.enumerated()
                 .filter { !lassoSelection.contains($0.offset) }
                 .map { $0.element }
-            isProgrammatic = true
-            view.canvasView.drawing = remaining
-            isProgrammatic = false
+            // Lifting and dropping are two assignments but one user action, so
+            // neither registers on its own; `commitMove` registers the pair.
+            preMoveDrawing = drawing
+            parent.undo.withoutRegistration {
+                isProgrammatic = true
+                view.canvasView.drawing = remaining
+                isProgrammatic = false
+            }
 
             movingStrokes = selected
             moveTranslation = .zero
@@ -205,9 +328,20 @@ struct NotebookCanvas: UIViewRepresentable {
             for i in moved.indices { moved[i].transform = moved[i].transform.concatenating(translate) }
             drawing.strokes.append(contentsOf: moved)
 
-            isProgrammatic = true
-            view.canvasView.drawing = drawing
-            isProgrammatic = false
+            parent.undo.withoutRegistration {
+                isProgrammatic = true
+                view.canvasView.drawing = drawing
+                isProgrammatic = false
+            }
+
+            // One undo step spanning the lift and the drop.
+            if let before = preMoveDrawing {
+                parent.undo.manager.registerUndo(withTarget: self) { target in
+                    target.applyDrawing(before, to: view, actionName: "Move Selection")
+                }
+                parent.undo.manager.setActionName("Move Selection")
+            }
+            preMoveDrawing = nil
 
             lassoSelection = Array(baseCount..<drawing.strokes.count)
             view.moveImageView.isHidden = true
@@ -259,10 +393,10 @@ struct NotebookCanvas: UIViewRepresentable {
                 let path = PKStrokePath(controlPoints: [point(start, 0), point(end, 0.05)], creationDate: Date())
                 drawing.strokes.append(PKStroke(ink: ink, path: path))
 
-                self.isProgrammatic = true
-                view.canvasView.drawing = drawing
-                self.isProgrammatic = false
-                p.onChange(drawing.dataRepresentation())
+                self.applyDrawing(drawing, to: view, actionName: "Straighten")
+                // Semantically exact: the stroke just snapped to a guide. The
+                // point is in `canvasView` space, which is the generator's view.
+                view.alignmentFeedback.alignmentOccurred(at: end)
             }
         }
 
@@ -488,9 +622,26 @@ final class ZoomablePageView: UIView {
     let paperView = PaperSheetView()
     let imageLayer = ImageLayerView()
     let canvasView = PKCanvasView()
+    let hoverPreview = InkHoverPreviewView()
     let moveImageView = UIImageView()
     let lassoView = LassoOverlayView()
     let straightenRecognizer = HoldStraightenRecognizer()
+    let hoverRecognizer = UIHoverGestureRecognizer()
+    let pencilController = PencilInteractionController()
+
+    /// Supplied by `NotebookCanvas.makeUIView`. `PKCanvasView` finds its undo
+    /// manager by walking the responder chain (canvas → contentView →
+    /// scrollView → here), and a view's `next` is its superview — so overriding
+    /// here is enough, with no first-responder juggling. Relying on the ambient
+    /// chain instead would find nothing: in a non-document SwiftUI app nothing
+    /// installs an `UndoManager` up at `UIWindow`, so stroke undo would never
+    /// be registered at all.
+    var undoBridge: NotebookUndoBridge?
+    override var undoManager: UndoManager? { undoBridge?.manager }
+
+    /// Snap-to-straight feedback. The `at:` point must be in the generator's own
+    /// view's coordinate space, so this one is bound to `canvasView` (page space).
+    lazy var alignmentFeedback = UICanvasFeedbackGenerator(view: canvasView)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -537,6 +688,19 @@ final class ZoomablePageView: UIView {
         straightenRecognizer.delaysTouchesEnded = false
         canvasView.addGestureRecognizer(straightenRecognizer)
 
+        // Between the canvas and the move image: living in page space means the
+        // preview dot scales with zoom for free.
+        hoverPreview.frame = contentView.bounds
+        contentView.addSubview(hoverPreview)
+
+        // On `contentView`, not `canvasView`, so `location(in:)` is already page
+        // space and hover keeps working when the canvas has interaction disabled
+        // for lasso/arrange (hover events propagate up to ancestor recognizers).
+        hoverRecognizer.cancelsTouchesInView = false
+        contentView.addGestureRecognizer(hoverRecognizer)
+
+        addInteraction(pencilController.interaction)
+
         moveImageView.isHidden = true
         moveImageView.isUserInteractionEnabled = false
         moveImageView.contentMode = .scaleToFill
@@ -554,6 +718,12 @@ final class ZoomablePageView: UIView {
         recenter()
     }
 
+    /// Maps a point in this view's space to screen space, so SwiftUI can place
+    /// the shortcut palette without knowing this view's padding or offset.
+    func convertToScreen(_ point: CGPoint) -> CGPoint {
+        convert(point, to: nil)
+    }
+
     func recenter() {
         let page = NotebookPageLayout.size
         let scaledW = page.width * scrollView.zoomScale
@@ -562,6 +732,57 @@ final class ZoomablePageView: UIView {
         let vInset = max(16, (scrollView.bounds.height - scaledH) / 2)
         scrollView.contentInset = UIEdgeInsets(top: vInset, left: hInset, bottom: 140, right: hInset)
     }
+}
+
+// MARK: - Hover ink preview
+
+/// A dot showing where the current tool would land, following the Apple Pencil
+/// Pro's hover. Lives in page space (inside `contentView`), so it scales with
+/// zoom without any conversion. Needs an M2-or-later iPad; on older hardware the
+/// hover recognizer simply never fires and the feature degrades to nothing.
+final class InkHoverPreviewView: UIView {
+    private let dot = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        dot.fillColor = UIColor.clear.cgColor
+        dot.strokeColor = UIColor.clear.cgColor
+        layer.addSublayer(dot)
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
+
+    func show(at point: CGPoint, tool: WritingTool, color: UIColor, width: CGFloat) {
+        let d = max(width, 2)
+        let rect = CGRect(x: point.x - d / 2, y: point.y - d / 2, width: d, height: d)
+
+        // No implicit animation: the dot must track the pencil exactly, and a
+        // quarter-second position tween reads as lag.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        dot.path = UIBezierPath(ovalIn: rect).cgPath
+        switch tool {
+        case .eraser:
+            // Hollow ring — an eraser removes rather than deposits.
+            dot.fillColor = UIColor.clear.cgColor
+            dot.strokeColor = UIColor.label.withAlphaComponent(0.5).cgColor
+            dot.lineWidth = 1.5
+        case .marker:
+            // Matches the alpha `WritingTool.pkTool` gives the marker.
+            dot.fillColor = color.withAlphaComponent(0.4).cgColor
+            dot.strokeColor = UIColor.clear.cgColor
+        case .pen, .pencil:
+            dot.fillColor = color.cgColor
+            dot.strokeColor = UIColor.clear.cgColor
+        }
+        CATransaction.commit()
+        isHidden = false
+    }
+
+    func hide() { isHidden = true }
 }
 
 // MARK: - Lasso overlay (loop to select, drag to move)
@@ -580,6 +801,10 @@ final class LassoOverlayView: UIView {
     var beginMoveIfInside: ((CGPoint) -> Bool)?
     var onMove: ((CGPoint) -> Void)?
     var onMoveEnded: (() -> Void)?
+
+    /// Bound to `self`, because `pathCompleted(at:)` takes a point in the
+    /// generator's own view's space and `handlePan` works in exactly that space.
+    private lazy var pathFeedback = UICanvasFeedbackGenerator(view: self)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -625,6 +850,7 @@ final class LassoOverlayView: UIView {
                 selectionLayer.path = nil
                 selectionRect = nil
                 startMarching(loopLayer)
+                pathFeedback.prepare()
             }
         case .changed:
             if mode == .move {
@@ -642,6 +868,7 @@ final class LassoOverlayView: UIView {
             } else if mode == .loop {
                 drawLoop(closed: true)
                 loopLayer.path = nil
+                pathFeedback.pathCompleted(at: p)
                 onLoopComplete?(loopPoints)
             }
             mode = .idle

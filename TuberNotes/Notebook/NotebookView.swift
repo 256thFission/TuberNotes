@@ -17,6 +17,12 @@ struct NotebookView: View {
     @State private var isPageLocked = false
     @State private var exportItem: ExportItem?
 
+    /// Pencil Pro shortcut palette. The anchor is in screen space; the canvas
+    /// reports it that way so this view doesn't need to know the canvas's
+    /// padding or whether the page strip is showing.
+    @State private var pencilPaletteAnchor: CGPoint?
+    @State private var pencilPaletteMode: PencilShortcutPalette.Mode = .full
+
     init(notebook: Notebook, store: NotebookStore) {
         _vm = StateObject(wrappedValue: NotebookViewModel(notebook: notebook, store: store))
     }
@@ -55,6 +61,7 @@ struct NotebookView: View {
                 Spacer()
                 NotebookToolbar(
                     vm: vm,
+                    undo: vm.undo,
                     isPageLocked: $isPageLocked,
                     isLassoActive: $vm.isLassoActive,
                     onHome: { vm.persistNow(); dismiss() },
@@ -66,6 +73,13 @@ struct NotebookView: View {
                 .padding(.trailing, showSidebar ? 348 : 0)
             }
             .zIndex(7)
+
+            // Above the toolbar (7), below the page navigator (8).
+            if pencilPaletteAnchor != nil {
+                pencilPaletteLayer
+                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                    .zIndex(7.5)
+            }
 
             if showPages {
                 PageFlipOverlay(vm: vm) { withAnimation { showPages = false } }
@@ -103,10 +117,99 @@ struct NotebookView: View {
                 .accessibilityIdentifier("nav-assistant")
             }
         }
+        .onChange(of: vm.currentPageID) { _, _ in dismissPencilPalette() }
+        .onChange(of: vm.isLassoActive) { _, active in if active { dismissPencilPalette() } }
+        .onChange(of: vm.isArrangingImages) { _, active in if active { dismissPencilPalette() } }
         .onDisappear { vm.persistNow() }
         .sheet(item: $exportItem) { item in
             ShareSheet(items: [item.url])
         }
+    }
+
+    // MARK: Pencil shortcut palette
+
+    private var pencilPaletteLayer: some View {
+        GeometryReader { geo in
+            let frame = geo.frame(in: .global)
+            let anchor = pencilPaletteAnchor ?? .zero
+            // Screen space -> this layer's space.
+            let local = CGPoint(x: anchor.x - frame.minX, y: anchor.y - frame.minY)
+            let size = estimatedPaletteSize
+
+            ZStack(alignment: .topLeading) {
+                // Tap-away dismissal.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissPencilPalette() }
+
+                PencilShortcutPalette(
+                    vm: vm,
+                    undo: vm.undo,
+                    mode: pencilPaletteMode,
+                    onAction: { dismissPencilPalette() }
+                )
+                .position(clampedPalettePosition(near: local, size: size, in: geo.size))
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    /// The palette has no intrinsic size until it lays out, so clamping uses an
+    /// estimate. Close enough: the clamp only has to keep it on screen.
+    private var estimatedPaletteSize: CGSize {
+        let width: CGFloat = 212
+        let swatchRows = max(1, Int(ceil(Double(vm.settings.favoriteColors.count) / 5.0)))
+        let hasColors = !vm.settings.favoriteColors.isEmpty
+        var height: CGFloat = 28  // vertical padding
+        if hasColors { height += CGFloat(swatchRows) * 30 + CGFloat(swatchRows - 1) * 10 }
+        if pencilPaletteMode == .full {
+            if hasColors { height += 13 }   // separator + spacing
+            height += 34 + 12               // tools
+            height += 13                    // separator + spacing
+            height += 34                    // undo/redo
+        }
+        return CGSize(width: width, height: height)
+    }
+
+    /// Offsets the palette down-right of the pencil tip (so the hand doesn't
+    /// cover it), then pulls it back inside the visible bounds near a page edge.
+    private func clampedPalettePosition(near point: CGPoint, size: CGSize, in bounds: CGSize) -> CGPoint {
+        let margin: CGFloat = 12
+        let tipOffset: CGFloat = 28
+
+        var center = CGPoint(x: point.x + tipOffset + size.width / 2,
+                             y: point.y + tipOffset + size.height / 2)
+
+        // Flip to the other side of the tip if that would run off the edge.
+        if center.x + size.width / 2 > bounds.width - margin {
+            center.x = point.x - tipOffset - size.width / 2
+        }
+        if center.y + size.height / 2 > bounds.height - margin {
+            center.y = point.y - tipOffset - size.height / 2
+        }
+
+        center.x = min(max(center.x, margin + size.width / 2), bounds.width - margin - size.width / 2)
+        center.y = min(max(center.y, margin + size.height / 2), bounds.height - margin - size.height / 2)
+        return center
+    }
+
+    private func showPencilPalette(at screenPoint: CGPoint, colorsOnly: Bool) {
+        let mode: PencilShortcutPalette.Mode = colorsOnly ? .colorsOnly : .full
+        withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+            // A second squeeze closes it; a double-tap in a different mode
+            // re-opens it rather than toggling off.
+            if pencilPaletteAnchor != nil, pencilPaletteMode == mode {
+                pencilPaletteAnchor = nil
+            } else {
+                pencilPaletteMode = mode
+                pencilPaletteAnchor = screenPoint
+            }
+        }
+    }
+
+    private func dismissPencilPalette() {
+        guard pencilPaletteAnchor != nil else { return }
+        withAnimation(.easeOut(duration: 0.16)) { pencilPaletteAnchor = nil }
     }
 
     // MARK: Export
@@ -184,7 +287,16 @@ struct NotebookView: View {
             images: vm.currentPage.images,
             isArrangingImages: vm.isArrangingImages,
             selectedImageID: vm.selectedImageID,
+            undo: vm.undo,
+            pencilDoubleTapEnabled: vm.settings.pencilDoubleTapEnabled,
+            pencilSqueezeEnabled: vm.settings.pencilSqueezeEnabled,
+            pencilHoverPreviewEnabled: vm.settings.pencilHoverPreviewEnabled,
             onChange: { vm.updateCurrentDrawing($0) },
+            onPencilToggleEraser: { vm.togglePencilEraser() },
+            onPencilSwapTool: { vm.swapToPreviousTool() },
+            onPencilShowPalette: { point, colorsOnly in
+                showPencilPalette(at: point, colorsOnly: colorsOnly)
+            },
             onLongPress: { withAnimation { showPages = true } },
             onZoomChanged: { vm.zoomScale = $0 },
             onLassoChanged: { vm.lassoRect = $0 },

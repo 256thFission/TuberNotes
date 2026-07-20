@@ -5,6 +5,9 @@ import UIKit
 /// exports, page locking, and the page navigator.
 struct NotebookToolbar: View {
     @ObservedObject var vm: NotebookViewModel
+    /// Nested `ObservableObject`s don't forward `objectWillChange`, so the
+    /// bridge needs its own observation for the buttons to enable/disable.
+    @ObservedObject var undo: NotebookUndoBridge
     @Binding var isPageLocked: Bool
     @Binding var isLassoActive: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -58,6 +61,18 @@ struct NotebookToolbar: View {
                 colorButton
                 if vm.tool.usesWidth { sizeButton }
             }
+
+            divider
+
+            iconButton("arrow.uturn.backward", label: "Undo", enabled: undo.canUndo) {
+                undo.undo()
+            }
+            .accessibilityIdentifier("toolbar-undo")
+
+            iconButton("arrow.uturn.forward", label: "Redo", enabled: undo.canRedo) {
+                undo.redo()
+            }
+            .accessibilityIdentifier("toolbar-redo")
 
             if showsUtilityControls {
                 divider
@@ -643,6 +658,25 @@ private struct NotebookToolbarSettingsView: View {
                         .accessibilityIdentifier("settings-page-lock")
                 }
                 .font(.subheadline)
+
+                Divider()
+
+                Text("Apple Pencil Pro")
+                    .font(.headline)
+
+                Group {
+                    Toggle("Double-tap toggles eraser", isOn: $vm.settings.pencilDoubleTapEnabled)
+                        .accessibilityIdentifier("settings-pencil-double-tap")
+                    Toggle("Squeeze shows shortcuts", isOn: $vm.settings.pencilSqueezeEnabled)
+                        .accessibilityIdentifier("settings-pencil-squeeze")
+                    Toggle("Hover ink preview", isOn: $vm.settings.pencilHoverPreviewEnabled)
+                        .accessibilityIdentifier("settings-pencil-hover")
+                }
+                .font(.subheadline)
+
+                Text("Double-tap and squeeze follow the action you pick in Settings › Apple Pencil.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Divider()
 

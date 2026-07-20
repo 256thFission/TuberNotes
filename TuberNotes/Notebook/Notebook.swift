@@ -49,6 +49,32 @@ struct NotebookSettings: Codable, Equatable {
     var showsExport = true
     var showsPageLock = true
     var favoriteColors = [InkPalette.default, "#E11D2E", "#F4B400", "#1A73E8"]
+
+    // Apple Pencil Pro
+    var pencilDoubleTapEnabled = true
+    var pencilSqueezeEnabled = true
+    var pencilHoverPreviewEnabled = true
+
+    init() {}
+
+    /// Hand-written so notebooks saved before a field existed still decode.
+    /// The synthesized `init(from:)` requires every non-optional key to be
+    /// present regardless of its property default, and `NotebookStore.reload()`
+    /// drops any notebook that throws — so adding a field without this would
+    /// make the whole library vanish.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        showsPageNavigation = try c.decodeIfPresent(Bool.self, forKey: .showsPageNavigation) ?? true
+        showsWritingTools = try c.decodeIfPresent(Bool.self, forKey: .showsWritingTools) ?? true
+        showsLayers = try c.decodeIfPresent(Bool.self, forKey: .showsLayers) ?? true
+        showsExport = try c.decodeIfPresent(Bool.self, forKey: .showsExport) ?? true
+        showsPageLock = try c.decodeIfPresent(Bool.self, forKey: .showsPageLock) ?? true
+        favoriteColors = try c.decodeIfPresent([String].self, forKey: .favoriteColors)
+            ?? [InkPalette.default, "#E11D2E", "#F4B400", "#1A73E8"]
+        pencilDoubleTapEnabled = try c.decodeIfPresent(Bool.self, forKey: .pencilDoubleTapEnabled) ?? true
+        pencilSqueezeEnabled = try c.decodeIfPresent(Bool.self, forKey: .pencilSqueezeEnabled) ?? true
+        pencilHoverPreviewEnabled = try c.decodeIfPresent(Bool.self, forKey: .pencilHoverPreviewEnabled) ?? true
+    }
 }
 
 // MARK: - Page
