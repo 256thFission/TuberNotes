@@ -26,6 +26,12 @@ struct NotebookView: View {
         ZStack {
             AmbientBackground(rippleModel: rippleModel)
 
+            // Passive, non-blocking touch observer feeds ripples. It never
+            // intercepts input, so drawing / tools / scrolling keep priority.
+            AmbientTouchLayer { point in rippleModel.add(at: point) }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
             VStack(spacing: 0) {
                 if showStrip {
                     PageStripView(vm: vm)
@@ -33,14 +39,6 @@ struct NotebookView: View {
                 }
                 pageArea
             }
-
-            // Passthrough observer: feeds ripples from touches over the page
-            // (finger or Pencil) without intercepting them. Sits above the page
-            // but below the chrome, so buttons/sidebar don't spawn ripples.
-            AmbientTouchLayer { point in rippleModel.add(at: point) }
-                .ignoresSafeArea()
-                .allowsHitTesting(true)
-                .zIndex(1)
 
             // Assistant floats OVER the page (doesn't shrink it).
             if showSidebar {
