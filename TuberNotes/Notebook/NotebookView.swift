@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Editor for one notebook: the zoomable page on a dark backdrop, a frosted
 /// floating tool bar, a toggleable top page strip, a template menu, and the
@@ -13,6 +14,8 @@ struct NotebookView: View {
     @State private var showStrip = false
     @State private var showSidebar = false
     @State private var showKeyPopup = false
+    @State private var isPageLocked = false
+    @State private var exportItem: ExportItem?
 
     init(notebook: Notebook, store: NotebookStore) {
         _vm = StateObject(wrappedValue: NotebookViewModel(notebook: notebook, store: store))
@@ -52,8 +55,12 @@ struct NotebookView: View {
                 Spacer()
                 NotebookToolbar(
                     vm: vm,
+                    isPageLocked: $isPageLocked,
+                    isLassoActive: $vm.isLassoActive,
                     onHome: { vm.persistNow(); dismiss() },
-                    onShowPages: { withAnimation { showPages = true } }
+                    onShowPages: { withAnimation { showPages = true } },
+                    onExportPDF: { exportPage(.pdf) },
+                    onExportArchive: { exportPage(.archive) }
                 )
                 .padding(.bottom, 16)
                 .padding(.trailing, showSidebar ? 348 : 0)
@@ -97,6 +104,32 @@ struct NotebookView: View {
             }
         }
         .onDisappear { vm.persistNow() }
+        .sheet(item: $exportItem) { item in
+            ShareSheet(items: [item.url])
+        }
+    }
+
+    // MARK: Export
+
+    private enum ExportKind { case pdf, archive }
+
+    private func exportPage(_ kind: ExportKind) {
+        let data: Data?
+        let ext: String
+        switch kind {
+        case .pdf:     data = vm.exportPDF();     ext = "pdf"
+        case .archive: data = vm.exportArchive(); ext = "spud"
+        }
+        guard let data else { return }
+        let safeTitle = vm.notebook.title.isEmpty ? "Notebook" : vm.notebook.title
+        let name = "\(safeTitle)-p\(vm.currentIndex + 1).\(ext)"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do {
+            try data.write(to: url, options: .atomic)
+            exportItem = ExportItem(url: url)
+        } catch {
+            vm.exportError = error.localizedDescription
+        }
     }
 
     private var templateMenu: some View {
@@ -164,4 +197,21 @@ struct NotebookView: View {
         .id(vm.currentPageID)
         .accessibilityIdentifier("notebook-page-area")
     }
+}
+
+/// Identifiable wrapper so a freshly-written export file can drive `.sheet(item:)`.
+private struct ExportItem: Identifiable {
+    let url: URL
+    var id: String { url.path }
+}
+
+/// Minimal UIActivityViewController bridge for sharing/saving an exported file.
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
