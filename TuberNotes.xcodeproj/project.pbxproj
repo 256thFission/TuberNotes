@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7F5948BC300DC2BE006B983D /* AmbientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5948BB300DC2BE006B983D /* AmbientBackground.swift */; };
 		A00000000000000000000001 /* TuberNotesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000101 /* TuberNotesApp.swift */; };
 		A00000000000000000000002 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000102 /* RootView.swift */; };
 		A00000000000000000000003 /* SpatialCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000103 /* SpatialCanvasView.swift */; };
@@ -41,6 +42,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7F5948BB300DC2BE006B983D /* AmbientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientBackground.swift; sourceTree = "<group>"; };
 		A00000000000000000000101 /* TuberNotesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuberNotesApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000102 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A00000000000000000000103 /* SpatialCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialCanvasView.swift; sourceTree = "<group>"; };
@@ -192,6 +194,7 @@
 				A0000000000000000000011B /* PageFlipOverlay.swift */,
 				A0000000000000000000011F /* PageStripView.swift */,
 				A00000000000000000000120 /* PageTemplate.swift */,
+				7F5948BB300DC2BE006B983D /* AmbientBackground.swift */,
 			);
 			path = Notebook;
 			sourceTree = "<group>";
@@ -282,6 +285,7 @@
 				A00000000000000000000011 /* TuberNoteArchive.swift in Sources */,
 				A00000000000000000000012 /* DrawingRefinementClient.swift in Sources */,
 				A00000000000000000000013 /* DrawingRefinementOverlay.swift in Sources */,
+				7F5948BC300DC2BE006B983D /* AmbientBackground.swift in Sources */,
 				A00000000000000000000014 /* LibraryView.swift in Sources */,
 				A00000000000000000000015 /* Notebook.swift in Sources */,
 				A00000000000000000000016 /* NotebookCanvas.swift in Sources */,
