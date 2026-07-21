@@ -1,0 +1,276 @@
+--- a/Notebook/NotebookView.swift
++++ b/Notebook/NotebookView.swift
+@@ -36,6 +36,12 @@
+     @State private var flipOffset: CGFloat = 0
+     @State private var isFlipAnimating = false
+     @State private var pageContainerWidth: CGFloat = 1024
++    @State private var zoomControlsVisible = true
++    @State private var zoomHideTask: Task<Void, Never>?
++
++    /// Width the assistant sidebar occupies on the trailing edge (panel + its
++    /// padding). Drives both the page's left shift and the toolbar's inset.
++    private let sidebarFootprint: CGFloat = 348
+ 
+     init(notebook: Notebook, store: NotebookStore) {
+         _vm = StateObject(wrappedValue: NotebookViewModel(notebook: notebook, store: store))
+@@ -58,6 +64,11 @@
+                 }
+                 pageArea
+             }
++            // Slide the page (and strip) left by half the sidebar's footprint so
++            // it re-centers in the space beside the panel instead of hiding
++            // behind it. Animates with the sidebar since every showAgentSidebar
++            // toggle is inside withAnimation.
++            .offset(x: showAgentSidebar ? -sidebarFootprint / 2 : 0)
+ 
+             if showAgentSidebar {
+                 HStack(spacing: 0) {
+@@ -88,7 +99,7 @@
+                     onAskAgent: { withAnimation { showAgentSidebar = true } }
+                 )
+                 .padding(.bottom, 14)
+-                .padding(.trailing, showAgentSidebar ? 348 : 0)
++                .padding(.trailing, showAgentSidebar ? sidebarFootprint : 0)
+             }
+             .zIndex(7)
+ 
+@@ -187,7 +198,19 @@
+         .onChange(of: vm.isArrangingImages) { _, active in
+             if active { dismissPencilPalette() }
+         }
+-        .onDisappear { vm.persistNow() }
++        .onChange(of: vm.zoomScale) { _, _ in revealZoomControls() }
++        .onChange(of: isPageLocked) { _, locked in
++            if locked {
++                zoomHideTask?.cancel()
++            } else {
++                revealZoomControls()
++            }
++        }
++        .onAppear { revealZoomControls() }
++        .onDisappear {
++            zoomHideTask?.cancel()
++            vm.persistNow()
++        }
+     }
+ 
+     private var templateMenu: some View {
+@@ -585,6 +608,26 @@
+         withAnimation(.easeOut(duration: 0.16)) { pencilPaletteAnchor = nil }
+     }
+ 
++    // MARK: Zoom indicator auto-fade
++
++    /// Show the zoom controls, then fade them out after a short idle. Any zoom
++    /// change (pinch settle or +/−/reset) calls this again and restarts the
++    /// timer, so the readout is present whenever the zoom is being used and
++    /// quietly disappears when it isn't. Only relevant while unlocked; locking
++    /// removes the controls entirely.
++    private func revealZoomControls() {
++        guard !isPageLocked else { return }
++        zoomHideTask?.cancel()
++        if !zoomControlsVisible {
++            withAnimation(.easeOut(duration: 0.2)) { zoomControlsVisible = true }
++        }
++        zoomHideTask = Task { @MainActor in
++            try? await Task.sleep(for: .seconds(2.5))
++            guard !Task.isCancelled else { return }
++            withAnimation(.easeInOut(duration: 0.5)) { zoomControlsVisible = false }
++        }
++    }
++
+     // MARK: Interactive page turn
+ 
+     private func handlePageFlipChanged(_ translation: CGFloat) {
+@@ -741,6 +784,8 @@
+             if !isPageLocked {
+                 zoomControls
+                     .padding(12)
++                    .opacity(zoomControlsVisible ? 1 : 0)
++                    .allowsHitTesting(zoomControlsVisible)
+                     .transition(.opacity.combined(with: .scale(scale: 0.92)))
+             }
+         }
+--- a/Notebook/NotebookToolbar.swift
++++ b/Notebook/NotebookToolbar.swift
+@@ -232,12 +232,16 @@
+         vm.selectTool(tool)
+     }
+ 
++    private func activateLasso() {
++        isLassoHeld = false
++        isLassoActive = true
++        isRefinementActive = false
++        vm.isAgenticLayersActive = false
++    }
++
+     private var lassoButton: some View {
+         Button {
+-            isLassoHeld = false
+-            isLassoActive = true
+-            isRefinementActive = false
+-            vm.isAgenticLayersActive = false
++            activateLasso()
+         } label: {
+             Image(systemName: "lasso")
+                 .font(.system(size: 17, weight: .medium))
+@@ -252,6 +256,11 @@
+                 .animation(.spring(response: 0.22, dampingFraction: 0.62), value: isLassoActive)
+         }
+         .highPriorityGesture(lassoHoldGesture)
++        // The high-priority hold-to-explain gesture otherwise swallows the
++        // Button's short tap (same pitfall the tool buttons work around), so
++        // the lasso can't be selected. Observe the tap simultaneously; the
++        // activation is idempotent.
++        .simultaneousGesture(TapGesture().onEnded { activateLasso() })
+         .accessibilityIdentifier("tool-lasso")
+         .accessibilityLabel("Selection lasso")
+         .accessibilityHint("Draw around strokes to select and move them")
+@@ -283,7 +292,11 @@
+             vm.isAgenticLayersActive = false
+             isRefinementActive.toggle()
+         } label: {
+-            Image(systemName: "lasso.badge.sparkles")
++            // Composed from the same "lasso" glyph as the regular lasso (rather
++            // than the "lasso.badge.sparkles" symbol, whose built-in badge shifts
++            // the lasso up) so both buttons share an identical baseline and their
++            // bottoms line up in the toolbar. The sparkles sit in the corner.
++            Image(systemName: "lasso")
+                 .font(.system(size: 17, weight: .medium))
+                 .frame(width: 34, height: 34)
+                 .foregroundStyle(isRefinementActive ? Color.white : Color.primary)
+@@ -292,6 +305,12 @@
+                         Circle().fill(Color.indigo)
+                     }
+                 }
++                .overlay(alignment: .topTrailing) {
++                    Image(systemName: "sparkles")
++                        .font(.system(size: 9, weight: .bold))
++                        .foregroundStyle(isRefinementActive ? Color.white : Color.indigo)
++                        .offset(x: 1, y: -1)
++                }
+                 .symbolEffect(.pulse, options: .speed(1.4), value: isRefinementActive)
+                 .animation(.spring(response: 0.22, dampingFraction: 0.62), value: isRefinementActive)
+         }
+--- a/Notebook/PageStripView.swift
++++ b/Notebook/PageStripView.swift
+@@ -74,6 +74,12 @@
+             .opacity(lifted && willDelete ? 0.7 : 1)
+             .shadow(color: .black.opacity(lifted ? 0.45 : 0), radius: 8, y: 4)
+             .zIndex(lifted ? 1 : 0)
++            // Neighbours ease into their new slot as the order changes…
++            .animation(.spring(response: 0.26, dampingFraction: 0.82), value: index)
++            // …but the lifted cell must never animate its slot change, or it
++            // springs away from the finger and rubber-bands. It's kept glued to
++            // the touch purely through dragOffset instead.
++            .transaction { txn in if lifted { txn.animation = nil } }
+             .contentShape(Rectangle())
+             .onTapGesture {
+                 guard !isDragging else { return }
+@@ -123,6 +129,7 @@
+                     draggingID = id
+                     pickupIndex = vm.notebook.pages.firstIndex { $0.id == id }
+                 }
++                guard let pickup = pickupIndex else { return }
+ 
+                 let tx = drag.translation.width
+                 let ty = drag.translation.height
+@@ -130,17 +137,25 @@
+ 
+                 if armDelete {
+                     if !willDelete { withAnimation(.easeOut(duration: 0.15)) { willDelete = true } }
+-                    dragOffset = CGSize(width: tx, height: ty)
+                 } else {
+                     if willDelete { withAnimation(.easeOut(duration: 0.15)) { willDelete = false } }
+-                    let start = pickupIndex ?? 0
++                    // Reflow live, but commit the move *without* animation. The
++                    // lifted cell's slot then changes instantly and is cancelled
++                    // out by the offset below on the same frame, so it stays
++                    // exactly under the finger; only the neighbours animate.
+                     let delta = Int((tx / stride).rounded())
+-                    let target = max(0, min(start + delta, vm.pageCount - 1))
+-                    if let current = vm.notebook.pages.firstIndex(where: { $0.id == id }), current != target {
+-                        withAnimation(.easeInOut(duration: 0.18)) { vm.movePage(from: current, to: target) }
++                    let target = max(0, min(pickup + delta, vm.pageCount - 1))
++                    if let current = vm.notebook.pages.firstIndex(where: { $0.id == id }),
++                       current != target {
++                        vm.movePage(from: current, to: target)
+                     }
+-                    dragOffset = CGSize(width: tx - CGFloat(delta) * stride, height: ty)
+                 }
++
++                // Glue the lifted cell to the finger: subtract the slots it has
++                // already been shifted through so the raw translation isn't
++                // double-counted against its new resting position.
++                let shifted = (vm.notebook.pages.firstIndex(where: { $0.id == id }) ?? pickup) - pickup
++                dragOffset = CGSize(width: tx - CGFloat(shifted) * stride, height: ty)
+             }
+             .onEnded { _ in
+                 if willDelete, vm.pageCount > 1,
+--- a/Notebook/AgentSidebarView.swift
++++ b/Notebook/AgentSidebarView.swift
+@@ -49,7 +49,11 @@
+         }
+         .frame(width: 340)
+         .frame(maxHeight: .infinity)
++        // Frost first, then a near-black box behind it, so the panel reads as a
++        // dark frosted slab (like the tool menu) instead of letting the white
++        // page bleed through the translucent material.
+         .background(.ultraThinMaterial, in: sidebarShape)
++        .background(Color.black.opacity(0.7), in: sidebarShape)
+         .overlay(
+             sidebarShape.strokeBorder(
+                 LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.12)],
+--- a/Pins/PinOverlayView.swift
++++ b/Pins/PinOverlayView.swift
+@@ -1,5 +1,12 @@
+ import SwiftUI
+ 
++/// Stable space the draggable Pin dots measure their translation against. The
++/// dots themselves are repositioned via `.position` while being dragged, so a
++/// gesture measured in each dot's *own* (moving) local space feeds that motion
++/// back into its translation — the source of the rubber-banding. Anchoring the
++/// drag to this fixed container space keeps the translation a clean finger delta.
++private let pinOverlayCoordinateSpace = "tuber.pin.overlay.space"
++
+ struct PinOverlayView: View {
+     typealias AnchorProjector = (PageNormalizedPoint) -> CGPoint
+ 
+@@ -96,6 +103,7 @@
+                     }
+                 }
+             }
++            .coordinateSpace(name: pinOverlayCoordinateSpace)
+         }
+         .allowsHitTesting(!annotations.isEmpty)
+         .onChange(of: annotations.map(\.id)) { _, annotationIDs in
+@@ -262,7 +270,7 @@
+     }
+ 
+     private var touchGesture: some Gesture {
+-        DragGesture(minimumDistance: 0)
++        DragGesture(minimumDistance: 0, coordinateSpace: .named(pinOverlayCoordinateSpace))
+             .onChanged { value in
+                 beginTouchIfNeeded()
+                 let distance = hypot(value.translation.width, value.translation.height)
+--- a/SpatialCanvas/DrawingRefinementOverlay.swift
++++ b/SpatialCanvas/DrawingRefinementOverlay.swift
+@@ -53,8 +53,16 @@
+                 controls
+             }
+             .onAppear {
+-                guard selection == nil, let initialSelection else { return }
+-                selection = initialSelection
++                guard selection == nil else { return }
++                if let initialSelection {
++                    // Carry a lasso selection made on the page into the tool.
++                    selection = initialSelection
++                } else {
++                    // Nothing selected yet: arm the lasso right away so the very
++                    // first drag draws a selection instead of being swallowed
++                    // while the tool sits idle waiting for a second tap.
++                    isLassoActive = true
++                }
+             }
+         }
+         .alert("Couldn’t refine drawing", isPresented: errorIsPresented) {

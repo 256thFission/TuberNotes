@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// Stable space the draggable Pin dots measure their translation against. The
+/// dots themselves are repositioned via `.position` while being dragged, so a
+/// gesture measured in each dot's *own* (moving) local space feeds that motion
+/// back into its translation — the source of the rubber-banding. Anchoring the
+/// drag to this fixed container space keeps the translation a clean finger delta.
+private let pinOverlayCoordinateSpace = "tuber.pin.overlay.space"
+
 struct PinOverlayView: View {
     typealias AnchorProjector = (PageNormalizedPoint) -> CGPoint
 
@@ -96,6 +103,7 @@ struct PinOverlayView: View {
                     }
                 }
             }
+            .coordinateSpace(name: pinOverlayCoordinateSpace)
         }
         .allowsHitTesting(!annotations.isEmpty)
         .onChange(of: annotations.map(\.id)) { _, annotationIDs in
@@ -262,7 +270,7 @@ private struct PinAnchor: View {
     }
 
     private var touchGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(pinOverlayCoordinateSpace))
             .onChanged { value in
                 beginTouchIfNeeded()
                 let distance = hypot(value.translation.width, value.translation.height)

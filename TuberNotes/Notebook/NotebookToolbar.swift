@@ -232,12 +232,16 @@ struct NotebookToolbar: View {
         vm.selectTool(tool)
     }
 
+    private func activateLasso() {
+        isLassoHeld = false
+        isLassoActive = true
+        isRefinementActive = false
+        vm.isAgenticLayersActive = false
+    }
+
     private var lassoButton: some View {
         Button {
-            isLassoHeld = false
-            isLassoActive = true
-            isRefinementActive = false
-            vm.isAgenticLayersActive = false
+            activateLasso()
         } label: {
             Image(systemName: "lasso")
                 .font(.system(size: 17, weight: .medium))
@@ -252,6 +256,11 @@ struct NotebookToolbar: View {
                 .animation(.spring(response: 0.22, dampingFraction: 0.62), value: isLassoActive)
         }
         .highPriorityGesture(lassoHoldGesture)
+        // The high-priority hold-to-explain gesture otherwise swallows the
+        // Button's short tap (same pitfall the tool buttons work around), so
+        // the lasso can't be selected. Observe the tap simultaneously; the
+        // activation is idempotent.
+        .simultaneousGesture(TapGesture().onEnded { activateLasso() })
         .accessibilityIdentifier("tool-lasso")
         .accessibilityLabel("Selection lasso")
         .accessibilityHint("Draw around strokes to select and move them")
@@ -283,7 +292,11 @@ struct NotebookToolbar: View {
             vm.isAgenticLayersActive = false
             isRefinementActive.toggle()
         } label: {
-            Image(systemName: "lasso.badge.sparkles")
+            // Composed from the same "lasso" glyph as the regular lasso (rather
+            // than the "lasso.badge.sparkles" symbol, whose built-in badge shifts
+            // the lasso up) so both buttons share an identical baseline and their
+            // bottoms line up in the toolbar. The sparkles sit in the corner.
+            Image(systemName: "lasso")
                 .font(.system(size: 17, weight: .medium))
                 .frame(width: 34, height: 34)
                 .foregroundStyle(isRefinementActive ? Color.white : Color.primary)
@@ -291,6 +304,12 @@ struct NotebookToolbar: View {
                     if isRefinementActive {
                         Circle().fill(Color.indigo)
                     }
+                }
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(isRefinementActive ? Color.white : Color.indigo)
+                        .offset(x: 1, y: -1)
                 }
                 .symbolEffect(.pulse, options: .speed(1.4), value: isRefinementActive)
                 .animation(.spring(response: 0.22, dampingFraction: 0.62), value: isRefinementActive)

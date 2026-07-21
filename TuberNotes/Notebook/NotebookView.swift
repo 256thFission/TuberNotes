@@ -36,6 +36,12 @@ struct NotebookView: View {
     @State private var flipOffset: CGFloat = 0
     @State private var isFlipAnimating = false
     @State private var pageContainerWidth: CGFloat = 1024
+    @State private var zoomControlsVisible = true
+    @State private var zoomHideTask: Task<Void, Never>?
+
+    /// Width the assistant sidebar occupies on the trailing edge (panel + its
+    /// padding). Drives both the page's left shift and the toolbar's inset.
+    private let sidebarFootprint: CGFloat = 348
 
     init(notebook: Notebook, store: NotebookStore) {
         _vm = StateObject(wrappedValue: NotebookViewModel(notebook: notebook, store: store))
@@ -58,6 +64,11 @@ struct NotebookView: View {
                 }
                 pageArea
             }
+            // Slide the page (and strip) left by half the sidebar's footprint so
+            // it re-centers in the space beside the panel instead of hiding
+            // behind it. Animates with the sidebar since every showAgentSidebar
+            // toggle is inside withAnimation.
+            .offset(x: showAgentSidebar ? -sidebarFootprint / 2 : 0)
 
             if showAgentSidebar {
                 HStack(spacing: 0) {
@@ -88,7 +99,7 @@ struct NotebookView: View {
                     onAskAgent: { withAnimation { showAgentSidebar = true } }
                 )
                 .padding(.bottom, 14)
-                .padding(.trailing, showAgentSidebar ? 348 : 0)
+                .padding(.trailing, showAgentSidebar ? sidebarFootprint : 0)
             }
             .zIndex(7)
 
@@ -187,7 +198,19 @@ struct NotebookView: View {
         .onChange(of: vm.isArrangingImages) { _, active in
             if active { dismissPencilPalette() }
         }
-        .onDisappear { vm.persistNow() }
+        .onChange(of: vm.zoomScale) { _, _ in revealZoomControls() }
+        .onChange(of: isPageLocked) { _, locked in
+            if locked {
+                zoomHideTask?.cancel()
+            } else {
+                revealZoomControls()
+            }
+        }
+        .onAppear { revealZoomControls() }
+        .onDisappear {
+            zoomHideTask?.cancel()
+            vm.persistNow()
+        }
     }
 
     private var templateMenu: some View {
@@ -585,6 +608,26 @@ struct NotebookView: View {
         withAnimation(.easeOut(duration: 0.16)) { pencilPaletteAnchor = nil }
     }
 
+    // MARK: Zoom indicator auto-fade
+
+    /// Show the zoom controls, then fade them out after a short idle. Any zoom
+    /// change (pinch settle or +/−/reset) calls this again and restarts the
+    /// timer, so the readout is present whenever the zoom is being used and
+    /// quietly disappears when it isn't. Only relevant while unlocked; locking
+    /// removes the controls entirely.
+    private func revealZoomControls() {
+        guard !isPageLocked else { return }
+        zoomHideTask?.cancel()
+        if !zoomControlsVisible {
+            withAnimation(.easeOut(duration: 0.2)) { zoomControlsVisible = true }
+        }
+        zoomHideTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.5)) { zoomControlsVisible = false }
+        }
+    }
+
     // MARK: Interactive page turn
 
     private func handlePageFlipChanged(_ translation: CGFloat) {
@@ -741,6 +784,8 @@ struct NotebookView: View {
             if !isPageLocked {
                 zoomControls
                     .padding(12)
+                    .opacity(zoomControlsVisible ? 1 : 0)
+                    .allowsHitTesting(zoomControlsVisible)
                     .transition(.opacity.combined(with: .scale(scale: 0.92)))
             }
         }

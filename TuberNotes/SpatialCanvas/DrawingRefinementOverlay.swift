@@ -53,8 +53,16 @@ struct DrawingRefinementOverlay: View {
                 controls
             }
             .onAppear {
-                guard selection == nil, let initialSelection else { return }
-                selection = initialSelection
+                guard selection == nil else { return }
+                if let initialSelection {
+                    // Carry a lasso selection made on the page into the tool.
+                    selection = initialSelection
+                } else {
+                    // Nothing selected yet: arm the lasso right away so the very
+                    // first drag draws a selection instead of being swallowed
+                    // while the tool sits idle waiting for a second tap.
+                    isLassoActive = true
+                }
             }
         }
         .alert("Couldn’t refine drawing", isPresented: errorIsPresented) {

@@ -49,7 +49,11 @@ struct AgentSidebarView: View {
         }
         .frame(width: 340)
         .frame(maxHeight: .infinity)
+        // Frost first, then a near-black box behind it, so the panel reads as a
+        // dark frosted slab (like the tool menu) instead of letting the white
+        // page bleed through the translucent material.
         .background(.ultraThinMaterial, in: sidebarShape)
+        .background(Color.black.opacity(0.7), in: sidebarShape)
         .overlay(
             sidebarShape.strokeBorder(
                 LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.12)],

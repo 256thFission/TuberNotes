@@ -74,6 +74,12 @@ struct PageStripView: View {
             .opacity(lifted && willDelete ? 0.7 : 1)
             .shadow(color: .black.opacity(lifted ? 0.45 : 0), radius: 8, y: 4)
             .zIndex(lifted ? 1 : 0)
+            // Neighbours ease into their new slot as the order changes…
+            .animation(.spring(response: 0.26, dampingFraction: 0.82), value: index)
+            // …but the lifted cell must never animate its slot change, or it
+            // springs away from the finger and rubber-bands. It's kept glued to
+            // the touch purely through dragOffset instead.
+            .transaction { txn in if lifted { txn.animation = nil } }
             .contentShape(Rectangle())
             .onTapGesture {
                 guard !isDragging else { return }
@@ -123,6 +129,7 @@ struct PageStripView: View {
                     draggingID = id
                     pickupIndex = vm.notebook.pages.firstIndex { $0.id == id }
                 }
+                guard let pickup = pickupIndex else { return }
 
                 let tx = drag.translation.width
                 let ty = drag.translation.height
@@ -130,17 +137,25 @@ struct PageStripView: View {
 
                 if armDelete {
                     if !willDelete { withAnimation(.easeOut(duration: 0.15)) { willDelete = true } }
-                    dragOffset = CGSize(width: tx, height: ty)
                 } else {
                     if willDelete { withAnimation(.easeOut(duration: 0.15)) { willDelete = false } }
-                    let start = pickupIndex ?? 0
+                    // Reflow live, but commit the move *without* animation. The
+                    // lifted cell's slot then changes instantly and is cancelled
+                    // out by the offset below on the same frame, so it stays
+                    // exactly under the finger; only the neighbours animate.
                     let delta = Int((tx / stride).rounded())
-                    let target = max(0, min(start + delta, vm.pageCount - 1))
-                    if let current = vm.notebook.pages.firstIndex(where: { $0.id == id }), current != target {
-                        withAnimation(.easeInOut(duration: 0.18)) { vm.movePage(from: current, to: target) }
+                    let target = max(0, min(pickup + delta, vm.pageCount - 1))
+                    if let current = vm.notebook.pages.firstIndex(where: { $0.id == id }),
+                       current != target {
+                        vm.movePage(from: current, to: target)
                     }
-                    dragOffset = CGSize(width: tx - CGFloat(delta) * stride, height: ty)
                 }
+
+                // Glue the lifted cell to the finger: subtract the slots it has
+                // already been shifted through so the raw translation isn't
+                // double-counted against its new resting position.
+                let shifted = (vm.notebook.pages.firstIndex(where: { $0.id == id }) ?? pickup) - pickup
+                dragOffset = CGSize(width: tx - CGFloat(shifted) * stride, height: ty)
             }
             .onEnded { _ in
                 if willDelete, vm.pageCount > 1,
