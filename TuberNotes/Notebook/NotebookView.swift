@@ -81,13 +81,16 @@ struct NotebookView: View {
     @State private var toolbarDragOffset = CGSize.zero
     private let onAgentNavigationRequest: ((AgentNavigationRequest) -> Void)?
     private let onReturnFromAgentNavigation: (() -> Void)?
+    private let citationArrivalContext: CitationNavigationContext?
+    @State private var didRequestCitationArrivalPins = false
 
     init(
         notebook: Notebook,
         store: NotebookStore,
         initialPageIndex: Int? = nil,
         onAgentNavigationRequest: ((AgentNavigationRequest) -> Void)? = nil,
-        onReturnFromAgentNavigation: (() -> Void)? = nil
+        onReturnFromAgentNavigation: (() -> Void)? = nil,
+        citationArrivalContext: CitationNavigationContext? = nil
     ) {
         let viewModel = NotebookViewModel(notebook: notebook, store: store)
         if let initialPageIndex, notebook.pages.indices.contains(initialPageIndex) {
@@ -98,6 +101,7 @@ struct NotebookView: View {
         _vm = StateObject(wrappedValue: viewModel)
         self.onAgentNavigationRequest = onAgentNavigationRequest
         self.onReturnFromAgentNavigation = onReturnFromAgentNavigation
+        self.citationArrivalContext = citationArrivalContext
     }
 
     var body: some View {
@@ -316,6 +320,13 @@ struct NotebookView: View {
                 }
                 pickerItem = nil
             }
+        }
+        .task {
+            guard let citationArrivalContext, !didRequestCitationArrivalPins else { return }
+            didRequestCitationArrivalPins = true
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            vm.annotateCitationArrivalPage(context: citationArrivalContext)
         }
         .onChange(of: vm.isAgenticLayersActive) { _, isActive in
             guard !isActive else { return }

@@ -284,7 +284,13 @@ struct AgentSidebarView: View {
                                 assistantMarkdown: message.body,
                                 isFocused: message.id == selectedMessageID,
                                 groundedCitation: message.groundedCitation,
-                                onOpenCitation: message.groundedCitation.flatMap(citationHandler)
+                                onOpenCitation: message.groundedCitation.flatMap { citation in
+                                    citationHandler(
+                                        for: citation,
+                                        question: message.userPrompt,
+                                        response: message.body
+                                    )
+                                }
                             )
                             .id(message.id)
                             .overlay(alignment: .bottomTrailing) {
@@ -367,9 +373,15 @@ struct AgentSidebarView: View {
     }
 
     private func citationHandler(
-        for citation: GroundedCitation
+        for citation: GroundedCitation,
+        question: String?,
+        response: String
     ) -> ((GroundedCitation) -> Void)? {
-        let request = vm.agentNavigationRequest(for: citation)
+        let context = CitationNavigationContext(
+            question: question ?? "Explain the selected work.",
+            response: response
+        )
+        let request = vm.agentNavigationRequest(for: citation, context: context)
         guard Self.canOpenCitation(
             request: request,
             hasNavigationHandler: onAgentNavigationRequest != nil
@@ -377,7 +389,10 @@ struct AgentSidebarView: View {
         return { tappedCitation in
             // Re-resolve at the user action so a deleted or changed textbook
             // cannot emit a stale route after the chip rendered.
-            guard let request = vm.agentNavigationRequest(for: tappedCitation) else { return }
+            guard let request = vm.agentNavigationRequest(
+                for: tappedCitation,
+                context: context
+            ) else { return }
             onAgentNavigationRequest(request)
         }
     }

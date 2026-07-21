@@ -339,14 +339,15 @@ struct LibraryView: View {
                 ContentUnavailableViewCompat(title: "Notebook missing", systemImage: "book.closed")
             }
         case .agentNavigation(let request):
-            if case let .openNotebook(notebookID, pageIndex) = request,
+            if let (notebookID, pageIndex, context) = navigationDestination(for: request),
                let notebook = store.notebook(id: notebookID),
                notebook.pages.indices.contains(pageIndex) {
                 NotebookView(
                     notebook: notebook,
                     store: store,
                     initialPageIndex: pageIndex,
-                    onReturnFromAgentNavigation: returnFromAgentNavigation
+                    onReturnFromAgentNavigation: returnFromAgentNavigation,
+                    citationArrivalContext: context
                 )
             } else {
                 ContentUnavailableViewCompat(title: "Notebook missing", systemImage: "book.closed")
@@ -355,13 +356,24 @@ struct LibraryView: View {
     }
 
     private func open(_ request: AgentNavigationRequest, from originatingNotebookID: UUID) {
-        guard case let .openNotebook(notebookID, pageIndex) = request,
+        guard let (notebookID, pageIndex, _) = navigationDestination(for: request),
               notebookID != originatingNotebookID,
               let notebook = store.notebook(id: notebookID),
               notebook.pages.indices.contains(pageIndex)
         else { return }
 
         path.append(.agentNavigation(request))
+    }
+
+    private func navigationDestination(
+        for request: AgentNavigationRequest
+    ) -> (notebookID: UUID, pageIndex: Int, context: CitationNavigationContext?)? {
+        switch request {
+        case let .openNotebook(notebookID, pageIndex):
+            return (notebookID, pageIndex, nil)
+        case let .openGroundedCitation(notebookID, pageIndex, context):
+            return (notebookID, pageIndex, context)
+        }
     }
 
     private func returnFromAgentNavigation() {

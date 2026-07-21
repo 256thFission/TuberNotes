@@ -125,12 +125,21 @@ final class NotebookViewModel: ObservableObject {
     /// A citation becomes navigable only when its imported notebook still
     /// exists, differs from the active worksheet, and its 1-based source page
     /// maps to a valid zero-based notebook index.
-    func agentNavigationRequest(for citation: GroundedCitation) -> AgentNavigationRequest? {
+    func agentNavigationRequest(
+        for citation: GroundedCitation,
+        context: CitationNavigationContext? = nil
+    ) -> AgentNavigationRequest? {
         let destination = store.notebook(id: citation.documentID)
-        return Self.validatedAgentNavigationRequest(
+        guard let request = Self.validatedAgentNavigationRequest(
             for: citation,
             activeNotebookID: notebook.id,
             destinationPageCount: destination?.pages.count
+        ) else { return nil }
+        guard let context else { return request }
+        return .openGroundedCitation(
+            notebookID: citation.documentID,
+            pageIndex: citation.pageNumber - 1,
+            context: context
         )
     }
 
@@ -1065,7 +1074,8 @@ final class NotebookViewModel: ObservableObject {
         parentThreadID: UUID? = nil,
         parentMessageID: UUID? = nil,
         createsFork: Bool = false,
-        selection suppliedSelection: SelectionArtifact? = nil
+        selection suppliedSelection: SelectionArtifact? = nil,
+        requiredInitialTool: ProductToolName? = nil
     ) {
         guard !isAnalyzing else { return }
         guard isAgenticLayersActive,
@@ -1148,6 +1158,7 @@ final class NotebookViewModel: ObservableObject {
         let client = AgentInsightClientFactory.make(
             knowledgeSearcher: knowledgeContext.searcher,
             requiresTextbookSearch: knowledgeContext.hasImportedTextbook,
+            requiredInitialTool: requiredInitialTool,
             onToolInvocation: { [weak self] invocation in
                 Task { @MainActor [weak self] in
                     guard let self, self.ownsAnalysis(requestID) else { return }
@@ -1271,6 +1282,34 @@ final class NotebookViewModel: ObservableObject {
                 finishAnalysis(requestID)
             }
         }
+    }
+
+    /// Runs only after a user taps a grounded citation and the destination
+    /// textbook page is visible. This is deliberately separate from answering
+    /// and from model-driven `switch_page` navigation.
+    func annotateCitationArrivalPage(context: CitationNavigationContext) {
+        guard let layerID = notebook.agenticLayers.first?.id else {
+            agentError = "The cited page has no Agentic Layer for source Pins."
+            return
+        }
+        // Citation arrival is an explicit user request to add visible Pins on
+        // the destination. Imported notebooks start with their layer inactive,
+        // so activate that existing layer before entering the normal analysis
+        // path; otherwise the request is rejected before transport.
+        selectAgenticLayer(layerID)
+        let pageNumber = currentIndex + 1
+        let question = String(context.question.prefix(500))
+        let priorResponse = String(context.response.prefix(2_000))
+        analyzeCurrentPage(
+            question: """
+            The student originally asked: “\(question)”
+
+            The completed response they followed here said: “\(priorResponse)”
+
+            On the currently visible cited textbook page (page \(pageNumber)), call place_pins now. Place exactly two concise explanation pins on this same page. The first must connect the most relevant visible textbook passage to the original question and clarify what the key term means in that specific case. The second must show how nearby visible source material supports or qualifies the completed response. Anchor each pin to the source content it describes. Do not switch pages, do not search another document, and do not merely answer in prose.
+            """,
+            requiredInitialTool: .placePins
+        )
     }
 
     /// Selects exactly one imported textbook corpus, excluding the active

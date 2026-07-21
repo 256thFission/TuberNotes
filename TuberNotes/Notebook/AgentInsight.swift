@@ -258,6 +258,7 @@ struct OpenAICodexVisionClient: AgentInsightClient {
     let transport: any OpenAICodexResponsesSending
     let knowledgeSearcher: any KnowledgeSearching
     let requiresTextbookSearch: Bool
+    let requiredInitialTool: ProductToolName?
     let onToolInvocation: @Sendable (ToolInvocationSummary?) -> Void
     var generation: UUID? { route.generation }
 
@@ -266,12 +267,14 @@ struct OpenAICodexVisionClient: AgentInsightClient {
         transport: any OpenAICodexResponsesSending = OpenAICodexResponsesTransport(),
         knowledgeSearcher: any KnowledgeSearching = OfflineTextbookKnowledgeSearcher(),
         requiresTextbookSearch: Bool = false,
+        requiredInitialTool: ProductToolName? = nil,
         onToolInvocation: @escaping @Sendable (ToolInvocationSummary?) -> Void = { _ in }
     ) {
         self.route = route
         self.transport = transport
         self.knowledgeSearcher = knowledgeSearcher
         self.requiresTextbookSearch = requiresTextbookSearch
+        self.requiredInitialTool = requiredInitialTool
         self.onToolInvocation = onToolInvocation
     }
 
@@ -336,9 +339,13 @@ struct OpenAICodexVisionClient: AgentInsightClient {
         ]
         if toolMode != .none {
             body["tools"] = Self.notebookTools(for: toolMode)
-            body["tool_choice"] = requiresTextbookSearch
-                ? ["type": "function", "name": "search_textbook"]
-                : "auto"
+            if let requiredInitialTool {
+                body["tool_choice"] = ["type": "function", "name": requiredInitialTool.rawValue]
+            } else if requiresTextbookSearch {
+                body["tool_choice"] = ["type": "function", "name": "search_textbook"]
+            } else {
+                body["tool_choice"] = "auto"
+            }
         }
         if requiresTextbookSearch {
             body["instructions"] = Self.requiredTextbookGroundingPolicy
@@ -845,6 +852,7 @@ enum AgentInsightClientFactory {
         runtimeAccess: AgentRuntimeAccess? = nil,
         knowledgeSearcher: any KnowledgeSearching = OfflineTextbookKnowledgeSearcher(),
         requiresTextbookSearch: Bool = false,
+        requiredInitialTool: ProductToolName? = nil,
         onToolInvocation: @escaping @Sendable (ToolInvocationSummary?) -> Void = { _ in }
     ) -> any AgentInsightClient {
         if runtimeAccess == nil {
@@ -859,6 +867,7 @@ enum AgentInsightClientFactory {
                 route: route,
                 knowledgeSearcher: knowledgeSearcher,
                 requiresTextbookSearch: requiresTextbookSearch,
+                requiredInitialTool: requiredInitialTool,
                 onToolInvocation: onToolInvocation
             )
         }
@@ -884,6 +893,7 @@ enum AgentInsightClientFactory {
                 route: route,
                 knowledgeSearcher: knowledgeSearcher,
                 requiresTextbookSearch: requiresTextbookSearch,
+                requiredInitialTool: requiredInitialTool,
                 onToolInvocation: onToolInvocation
             )
         }

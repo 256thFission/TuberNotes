@@ -32,6 +32,19 @@ struct InvestigationRequest: Identifiable, Equatable, Sendable {
 /// are not model tools and must never be decoded from an assistant response.
 enum AgentNavigationRequest: Equatable, Hashable, Sendable {
     case openNotebook(notebookID: UUID, pageIndex: Int)
+    case openGroundedCitation(
+        notebookID: UUID,
+        pageIndex: Int,
+        context: CitationNavigationContext
+    )
+}
+
+/// Conversation context carried by an explicit citation tap. This is not
+/// citation provenance: document and page identity still come only from the
+/// returned `KnowledgeHit`.
+struct CitationNavigationContext: Equatable, Hashable, Sendable {
+    let question: String
+    let response: String
 }
 
 enum AgentEvent: Equatable, Sendable {
