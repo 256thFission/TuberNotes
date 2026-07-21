@@ -73,6 +73,12 @@ Do not proceed into corpus extraction (PC-25) in the same session.
 
 ## Session log
 
+- 2026-07-21 — At Phillip's request, advanced the opt-in demo seed marker to v3
+  so the next flagged launch reconstructs the worksheet and imported textbook
+  while preserving Keychain-backed OpenAI login state. Parse and diff checks
+  passed; exact-device preflight and the flagged signed Release build, install,
+  and normal launch succeeded. Artifacts:
+  `tmp/verify/pc24-pdf-notebook-import/demo-reset-v3/`.
 - 2026-07-21 — At Phillip's explicit request, ran the canonical device delivery
   for the demo flag: preflight pinned physical iPad
   `2DD98ECC-A26A-5730-943B-01DD63DC4117`; a signed Release build with

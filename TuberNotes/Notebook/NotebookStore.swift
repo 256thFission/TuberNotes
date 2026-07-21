@@ -225,7 +225,7 @@ final class NotebookStore: ObservableObject {
 
 #if TEXTBOOK_CITATION_DEMO
     private var textbookCitationDemoMarkerURL: URL {
-        directory.appendingPathComponent(".textbook-citation-demo-v2")
+        directory.appendingPathComponent(".textbook-citation-demo-v3")
     }
 
     /// A demo build owns a deterministic two-notebook library. It seeds once so
@@ -281,7 +281,7 @@ final class NotebookStore: ObservableObject {
             )]
         )
         save(worksheet)
-        try Data("v2\n".utf8).write(to: textbookCitationDemoMarkerURL, options: .atomic)
+        try Data("v3\n".utf8).write(to: textbookCitationDemoMarkerURL, options: .atomic)
         return worksheet
     }
 
