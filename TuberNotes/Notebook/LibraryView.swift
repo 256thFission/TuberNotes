@@ -380,6 +380,9 @@ private enum LibraryRoute: Hashable {
 struct NotebookCoverCard: View {
     let notebook: Notebook
     var isOpening = false
+    @State private var thumbnail: UIImage?
+
+    private var firstPage: NotebookPage? { notebook.pages.first }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -388,6 +391,23 @@ struct NotebookCoverCard: View {
                 Rectangle()
                     .fill(.black.opacity(0.16))
                     .frame(width: 8)
+                if let thumbnail {
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 108, height: 142)
+                        .background(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 3)
+                                .strokeBorder(.white.opacity(0.92), lineWidth: 5)
+                        }
+                        .shadow(color: .black.opacity(0.22), radius: 4, y: 3)
+                        .rotationEffect(.degrees(4))
+                        .padding(.leading, 27)
+                        .padding(.top, 35)
+                        .accessibilityHidden(true)
+                }
                 Image(systemName: isOpening ? "book.fill" : "book.closed.fill")
                     .foregroundStyle(.white.opacity(0.9))
                     .padding(14)
@@ -406,6 +426,8 @@ struct NotebookCoverCard: View {
             )
             .scaleEffect(isOpening ? 1.035 : 1)
             .shadow(color: .black.opacity(isOpening ? 0.25 : 0), radius: 14, x: 8, y: 7)
+            .onAppear { updateThumbnail() }
+            .onChange(of: firstPage) { _, _ in updateThumbnail() }
 
             Text(notebook.title)
                 .font(.subheadline.weight(.semibold))
@@ -414,6 +436,10 @@ struct NotebookCoverCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func updateThumbnail() {
+        thumbnail = firstPage?.renderThumbnail(maxWidth: 216)
     }
 }
 

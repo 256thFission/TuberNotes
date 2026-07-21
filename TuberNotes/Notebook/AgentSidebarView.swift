@@ -455,7 +455,7 @@ struct AgentSidebarView: View {
               !vm.isAnalyzing,
               prompt.isEmpty else { return }
         didRunDemoAutotype = true
-        let demoQuestion = "Why does an SN1 reaction at a chiral carbon produce racemization rather than retention?"
+        let demoQuestion = "What does racemic mean in this case?"
         isComposerFocused = true
         try? await Task.sleep(for: .milliseconds(450))
         guard !Task.isCancelled else { return }

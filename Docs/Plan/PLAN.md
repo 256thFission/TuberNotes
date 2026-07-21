@@ -2190,6 +2190,44 @@ progress, verification-code, and recoverable-error information only when useful.
   build, install, or launch followed because another Release delivery was in
   progress.
 
+## Active line — PC-33: scrapbook notebook thumbnails
+
+Status: **in progress**
+
+### Objective
+
+Make the library's notebook covers feel personal and immediately recognizable
+by layering a cropped thumbnail of each notebook's first page over its existing
+colored cover.
+
+### Scope
+
+- `TuberNotes/Notebook/LibraryView.swift`
+- this plan entry
+
+### Non-goals
+
+- no change to notebook persistence, page rendering, imports, or cover
+  selection;
+- no new thumbnail cache or generated artwork;
+- no changes to the existing Agent-related working-tree edits.
+
+### Work and acceptance evidence
+
+1. Reuse `NotebookPage.renderThumbnail` for the first page only.
+2. Present it as a clipped, lightly rotated, paper-backed layer on the existing
+   `NotebookCoverCard`, preserving the cover color, title, page count, and tap
+   target.
+3. Run the focused source/build checks, then inspect the normal Release app on
+   Phillip's explicitly named pinned iPad when it is available. Phillip retains
+   the final visual-taste verdict.
+
+### Session log
+
+- 2026-07-21 — Started a bounded library-cover treatment. Existing page
+  thumbnail rendering will be reused; implementation and delivery evidence are
+  pending.
+
 ## Planned line — PC-24 … PC-29: recorded textbook-citation demo
 
 Status: **implementation complete — manual normal-app feedback and capture deferred to Phillip**
@@ -2259,6 +2297,11 @@ suite failure.
 
 ### Session log
 
+- 2026-07-21 — Changed the demo autotype question to “What does racemic mean in
+  this case?” Imported-textbook requests now retain an explicit mandatory
+  textbook-grounding instruction across both the forced search and answer
+  turns; citation provenance remains exclusively the returned typed hit. The
+  flagged signed Release rebuilt, installed, and launched on the pinned iPad.
 - 2026-07-21 — Added demo-flag-only composer automation: the first empty
   Notebook Chat types a legitimate SN1 racemization question at a visible
   character cadence and submits through the normal Send path. Production builds

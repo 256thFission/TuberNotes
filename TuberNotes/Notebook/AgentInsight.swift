@@ -340,6 +340,9 @@ struct OpenAICodexVisionClient: AgentInsightClient {
                 ? ["type": "function", "name": "search_textbook"]
                 : "auto"
         }
+        if requiresTextbookSearch {
+            body["instructions"] = Self.requiredTextbookGroundingPolicy
+        }
 
         do {
             return try await Self.runNotebookResponseLoop(
@@ -386,6 +389,7 @@ struct OpenAICodexVisionClient: AgentInsightClient {
         var invocations: [ToolInvocationSummary] = []
         var requestBody = initialBody
         var conversationInput = initialBody["input"] as? [[String: Any]] ?? []
+        let instructions = initialBody["instructions"] as? String
         var previousSearchWasEmpty = false
         await AgentRuntimeDiagnostics.shared.record("loop_started", fields: [
             "tool_mode": diagnosticToolMode(toolMode),
@@ -479,7 +483,12 @@ struct OpenAICodexVisionClient: AgentInsightClient {
                 previousSearchWasEmpty = hits.isEmpty
                 conversationInput.append(contentsOf: response.output)
                 conversationInput.append(try functionCallOutput(callID: call.callID, hits: hits))
-                requestBody = followUpBody(routeModel: model, input: conversationInput, toolMode: toolMode)
+                requestBody = followUpBody(
+                    routeModel: model,
+                    input: conversationInput,
+                    toolMode: toolMode,
+                    instructions: instructions
+                )
                 continue
             }
 
@@ -559,6 +568,10 @@ struct OpenAICodexVisionClient: AgentInsightClient {
     private static let toolPolicy = """
 
     You may use search_textbook to retrieve textbook evidence when the student's question needs facts not visible in the notebook images. Choose only a query and result limit; the app owns the textbook and page scope. Base textbook claims only on returned results. You may use place_pins to attach concise guidance to a visible location on any supplied page. You may use switch_page only when the student explicitly asks to navigate within this notebook; never switch pages merely because another page is relevant. Coordinates are normalized across the full target page. Otherwise answer in text.
+    """
+
+    private static let requiredTextbookGroundingPolicy = """
+    An imported textbook is available. You must search_textbook before answering. Use the returned textbook passage as the required grounding for the answer. Answer the student's exact question directly and concisely. Do not invent or infer a page number from prose; source navigation is owned by the app's returned search result.
     """
 
     private static var searchTextbookTool: [String: Any] { [
@@ -769,9 +782,10 @@ struct OpenAICodexVisionClient: AgentInsightClient {
     private static func followUpBody(
         routeModel: String,
         input: [[String: Any]],
-        toolMode: NotebookToolMode
+        toolMode: NotebookToolMode,
+        instructions: String?
     ) -> [String: Any] {
-        return [
+        var body: [String: Any] = [
             "model": routeModel,
             "stream": true,
             "store": false,
@@ -782,6 +796,10 @@ struct OpenAICodexVisionClient: AgentInsightClient {
             "tools": notebookTools(for: toolMode),
             "tool_choice": "auto"
         ]
+        if let instructions {
+            body["instructions"] = instructions
+        }
+        return body
     }
 
     private static func toolCalls(from output: [[String: Any]]) throws -> [AgentToolCall] {

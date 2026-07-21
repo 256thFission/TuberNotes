@@ -87,6 +87,15 @@ PC-27 and does not belong in this session.
 
 ## Session log
 
+- 2026-07-21 — Replaced the demo autotype copy with “What does racemic mean in
+  this case?” For imported-textbook requests, the normal Responses request now
+  carries an explicit grounding instruction on both the forced-search turn and
+  its answer follow-up: search is mandatory, the returned passage is required
+  grounding, and page provenance remains app-owned rather than inferred from
+  prose. The clickable citation continues to be constructed solely from the
+  returned typed hit. Parse and diff checks passed; the flagged signed Release
+  rebuilt, installed, and launched normally on the pinned iPad. Artifacts:
+  `tmp/verify/pc26-live-textbook-search/demo-grounding-prompt/`.
 - 2026-07-21 — Added a `TEXTBOOK_CITATION_DEMO`-only first-chat script. On the
   first empty Notebook Chat presentation it focuses the normal composer, types
   “Why does an SN1 reaction at a chiral carbon produce racemization rather than
