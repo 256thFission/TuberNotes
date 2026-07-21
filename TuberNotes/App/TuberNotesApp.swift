@@ -4,6 +4,12 @@ import SwiftUI
 struct TuberNotesApp: App {
     @StateObject private var notebookStore = NotebookStore.shared
 
+    init() {
+        #if DEBUG
+        FeedbackThreadStore.resetIfRequested()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             rootContent

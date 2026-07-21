@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7F5948BC300DC2BE006B983D /* AmbientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5948BB300DC2BE006B983D /* AmbientBackground.swift */; };
 		A00000000000000000000001 /* TuberNotesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000101 /* TuberNotesApp.swift */; };
 		A00000000000000000000002 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000102 /* RootView.swift */; };
 		A00000000000000000000003 /* SpatialCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000103 /* SpatialCanvasView.swift */; };
 		A00000000000000000000004 /* PencilCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000104 /* PencilCanvas.swift */; };
+		A00000000000000000000028 /* MagicLasso.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000128 /* MagicLasso.swift */; };
 		A00000000000000000000005 /* Pin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000105 /* Pin.swift */; };
 		A00000000000000000000006 /* PinOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000106 /* PinOverlayView.swift */; };
 		A00000000000000000000007 /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000107 /* AgentClient.swift */; };
@@ -20,33 +20,50 @@
 		A0000000000000000000000A /* PenFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010A /* PenFixture.swift */; };
 		A0000000000000000000000C /* AgentInteractionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010C /* AgentInteractionSession.swift */; };
 		A0000000000000000000000D /* AgentRequestBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010D /* AgentRequestBanner.swift */; };
-		A0000000000000000000000E /* ConversationLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010E /* ConversationLayer.swift */; };
-		A0000000000000000000000F /* ConversationLayerOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010F /* ConversationLayerOverlayView.swift */; };
-		A00000000000000000000010 /* PDFStrokeCompression.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000110 /* PDFStrokeCompression.swift */; };
-		A00000000000000000000011 /* TuberNoteArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000111 /* TuberNoteArchive.swift */; };
-		A00000000000000000000012 /* DrawingRefinementClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000112 /* DrawingRefinementClient.swift */; };
-		A00000000000000000000013 /* DrawingRefinementOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000113 /* DrawingRefinementOverlay.swift */; };
-		A00000000000000000000014 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000114 /* LibraryView.swift */; };
-		A00000000000000000000015 /* Notebook.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000115 /* Notebook.swift */; };
-		A00000000000000000000016 /* NotebookCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000116 /* NotebookCanvas.swift */; };
-		A00000000000000000000017 /* NotebookStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000117 /* NotebookStore.swift */; };
-		A00000000000000000000018 /* NotebookToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000118 /* NotebookToolbar.swift */; };
-		A00000000000000000000019 /* NotebookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000119 /* NotebookView.swift */; };
-		A0000000000000000000001A /* NotebookViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011A /* NotebookViewModel.swift */; };
-		A0000000000000000000001B /* PageFlipOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011B /* PageFlipOverlay.swift */; };
-		A0000000000000000000001C /* AgentInsight.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011C /* AgentInsight.swift */; };
-		A0000000000000000000001D /* AgentSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011D /* AgentSidebarView.swift */; };
-		A0000000000000000000001E /* GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011E /* GlassStyle.swift */; };
-		A0000000000000000000001F /* PageStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000011F /* PageStripView.swift */; };
-		A00000000000000000000020 /* PageTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000120 /* PageTemplate.swift */; };
+		A0000000000000000000000E /* DocumentContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010E /* DocumentContracts.swift */; };
+		A0000000000000000000000F /* SpatialContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010F /* SpatialContracts.swift */; };
+		A00000000000000000000010 /* PinContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000110 /* PinContracts.swift */; };
+		A00000000000000000000011 /* InteractionContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000111 /* InteractionContracts.swift */; };
+		A00000000000000000000012 /* AgentContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000112 /* AgentContracts.swift */; };
+		A00000000000000000000013 /* KnowledgeContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000113 /* KnowledgeContracts.swift */; };
+		A00000000000000000000014 /* FeedbackThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000114 /* FeedbackThread.swift */; };
+		A00000000000000000000015 /* FeedbackThreadSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000115 /* FeedbackThreadSession.swift */; };
+		A00000000000000000000016 /* FeedbackThreadViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000116 /* FeedbackThreadViews.swift */; };
+		A00000000000000000000017 /* ResponsesSSEDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000117 /* ResponsesSSEDecoder.swift */; };
+		A00000000000000000000018 /* DebugCodexTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000118 /* DebugCodexTransport.swift */; };
+		A00000000000000000000019 /* DebugCodexAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000119 /* DebugCodexAgentClient.swift */; };
+		C00000000000000000000001 /* DocumentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000101 /* DocumentStore.swift */; };
+		D10000000000000000000001 /* DrawingRefinementClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000101 /* DrawingRefinementClient.swift */; };
+		D10000000000000000000002 /* ConversationLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000102 /* ConversationLayer.swift */; };
+		D10000000000000000000003 /* ConversationLayerOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000103 /* ConversationLayerOverlayView.swift */; };
+		D10000000000000000000004 /* DrawingRefinementOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000104 /* DrawingRefinementOverlay.swift */; };
+		D10000000000000000000005 /* PDFStrokeCompression.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000105 /* PDFStrokeCompression.swift */; };
+		D10000000000000000000006 /* TuberNoteArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000106 /* TuberNoteArchive.swift */; };
+		D10000000000000000000007 /* AgentInsight.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000107 /* AgentInsight.swift */; };
+		D10000000000000000000008 /* AgentSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000108 /* AgentSidebarView.swift */; };
+		D10000000000000000000009 /* AmbientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000109 /* AmbientBackground.swift */; };
+		D1000000000000000000000A /* GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000000000000000000010A /* GlassStyle.swift */; };
+		D1000000000000000000000B /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000000000000000000010B /* LibraryView.swift */; };
+		D1000000000000000000000C /* Notebook.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000000000000000000010C /* Notebook.swift */; };
+		D1000000000000000000000D /* NotebookCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000000000000000000010D /* NotebookCanvas.swift */; };
+		D1000000000000000000000E /* NotebookStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000000000000000000010E /* NotebookStore.swift */; };
+		D1000000000000000000000F /* NotebookToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000000000000000000010F /* NotebookToolbar.swift */; };
+		D10000000000000000000010 /* NotebookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000110 /* NotebookView.swift */; };
+		D10000000000000000000011 /* NotebookViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000111 /* NotebookViewModel.swift */; };
+		D10000000000000000000012 /* PageFlipOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000112 /* PageFlipOverlay.swift */; };
+		D10000000000000000000013 /* PageStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000113 /* PageStripView.swift */; };
+		D10000000000000000000014 /* PageTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000114 /* PageTemplate.swift */; };
+		D10000000000000000000015 /* NotebookUndoBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000115 /* NotebookUndoBridge.swift */; };
+		D10000000000000000000016 /* PencilInteractionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000116 /* PencilInteractionController.swift */; };
+		D10000000000000000000017 /* PencilShortcutPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000117 /* PencilShortcutPalette.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		7F5948BB300DC2BE006B983D /* AmbientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientBackground.swift; sourceTree = "<group>"; };
 		A00000000000000000000101 /* TuberNotesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuberNotesApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000102 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A00000000000000000000103 /* SpatialCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialCanvasView.swift; sourceTree = "<group>"; };
 		A00000000000000000000104 /* PencilCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilCanvas.swift; sourceTree = "<group>"; };
+		A00000000000000000000128 /* MagicLasso.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagicLasso.swift; sourceTree = "<group>"; };
 		A00000000000000000000105 /* Pin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pin.swift; sourceTree = "<group>"; };
 		A00000000000000000000106 /* PinOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinOverlayView.swift; sourceTree = "<group>"; };
 		A00000000000000000000107 /* AgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClient.swift; sourceTree = "<group>"; };
@@ -56,25 +73,42 @@
 		A0000000000000000000010B /* TuberNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TuberNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A0000000000000000000010C /* AgentInteractionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentInteractionSession.swift; sourceTree = "<group>"; };
 		A0000000000000000000010D /* AgentRequestBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRequestBanner.swift; sourceTree = "<group>"; };
-		A0000000000000000000010E /* ConversationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLayer.swift; sourceTree = "<group>"; };
-		A0000000000000000000010F /* ConversationLayerOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLayerOverlayView.swift; sourceTree = "<group>"; };
-		A00000000000000000000110 /* PDFStrokeCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFStrokeCompression.swift; sourceTree = "<group>"; };
-		A00000000000000000000111 /* TuberNoteArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuberNoteArchive.swift; sourceTree = "<group>"; };
-		A00000000000000000000112 /* DrawingRefinementClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingRefinementClient.swift; sourceTree = "<group>"; };
-		A00000000000000000000113 /* DrawingRefinementOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingRefinementOverlay.swift; sourceTree = "<group>"; };
-		A00000000000000000000114 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
-		A00000000000000000000115 /* Notebook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notebook.swift; sourceTree = "<group>"; };
-		A00000000000000000000116 /* NotebookCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookCanvas.swift; sourceTree = "<group>"; };
-		A00000000000000000000117 /* NotebookStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookStore.swift; sourceTree = "<group>"; };
-		A00000000000000000000118 /* NotebookToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookToolbar.swift; sourceTree = "<group>"; };
-		A00000000000000000000119 /* NotebookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookView.swift; sourceTree = "<group>"; };
-		A0000000000000000000011A /* NotebookViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookViewModel.swift; sourceTree = "<group>"; };
-		A0000000000000000000011B /* PageFlipOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageFlipOverlay.swift; sourceTree = "<group>"; };
-		A0000000000000000000011C /* AgentInsight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentInsight.swift; sourceTree = "<group>"; };
-		A0000000000000000000011D /* AgentSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSidebarView.swift; sourceTree = "<group>"; };
-		A0000000000000000000011E /* GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassStyle.swift; sourceTree = "<group>"; };
-		A0000000000000000000011F /* PageStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageStripView.swift; sourceTree = "<group>"; };
-		A00000000000000000000120 /* PageTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageTemplate.swift; sourceTree = "<group>"; };
+		A0000000000000000000010E /* DocumentContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentContracts.swift; sourceTree = "<group>"; };
+		A0000000000000000000010F /* SpatialContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialContracts.swift; sourceTree = "<group>"; };
+		A00000000000000000000110 /* PinContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinContracts.swift; sourceTree = "<group>"; };
+		A00000000000000000000111 /* InteractionContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionContracts.swift; sourceTree = "<group>"; };
+		A00000000000000000000112 /* AgentContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentContracts.swift; sourceTree = "<group>"; };
+		A00000000000000000000113 /* KnowledgeContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeContracts.swift; sourceTree = "<group>"; };
+		A00000000000000000000114 /* FeedbackThread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackThread.swift; sourceTree = "<group>"; };
+		A00000000000000000000115 /* FeedbackThreadSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackThreadSession.swift; sourceTree = "<group>"; };
+		A00000000000000000000116 /* FeedbackThreadViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackThreadViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000117 /* ResponsesSSEDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponsesSSEDecoder.swift; sourceTree = "<group>"; };
+		A00000000000000000000118 /* DebugCodexTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugCodexTransport.swift; sourceTree = "<group>"; };
+		A00000000000000000000119 /* DebugCodexAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugCodexAgentClient.swift; sourceTree = "<group>"; };
+		C00000000000000000000101 /* DocumentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStore.swift; sourceTree = "<group>"; };
+		D10000000000000000000101 /* DrawingRefinementClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingRefinementClient.swift; sourceTree = "<group>"; };
+		D10000000000000000000102 /* ConversationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLayer.swift; sourceTree = "<group>"; };
+		D10000000000000000000103 /* ConversationLayerOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLayerOverlayView.swift; sourceTree = "<group>"; };
+		D10000000000000000000104 /* DrawingRefinementOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingRefinementOverlay.swift; sourceTree = "<group>"; };
+		D10000000000000000000105 /* PDFStrokeCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFStrokeCompression.swift; sourceTree = "<group>"; };
+		D10000000000000000000106 /* TuberNoteArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuberNoteArchive.swift; sourceTree = "<group>"; };
+		D10000000000000000000107 /* AgentInsight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentInsight.swift; sourceTree = "<group>"; };
+		D10000000000000000000108 /* AgentSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSidebarView.swift; sourceTree = "<group>"; };
+		D10000000000000000000109 /* AmbientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientBackground.swift; sourceTree = "<group>"; };
+		D1000000000000000000010A /* GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassStyle.swift; sourceTree = "<group>"; };
+		D1000000000000000000010B /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		D1000000000000000000010C /* Notebook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notebook.swift; sourceTree = "<group>"; };
+		D1000000000000000000010D /* NotebookCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookCanvas.swift; sourceTree = "<group>"; };
+		D1000000000000000000010E /* NotebookStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookStore.swift; sourceTree = "<group>"; };
+		D1000000000000000000010F /* NotebookToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookToolbar.swift; sourceTree = "<group>"; };
+		D10000000000000000000110 /* NotebookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookView.swift; sourceTree = "<group>"; };
+		D10000000000000000000111 /* NotebookViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookViewModel.swift; sourceTree = "<group>"; };
+		D10000000000000000000112 /* PageFlipOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageFlipOverlay.swift; sourceTree = "<group>"; };
+		D10000000000000000000113 /* PageStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageStripView.swift; sourceTree = "<group>"; };
+		D10000000000000000000114 /* PageTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageTemplate.swift; sourceTree = "<group>"; };
+		D10000000000000000000115 /* NotebookUndoBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookUndoBridge.swift; sourceTree = "<group>"; };
+		D10000000000000000000116 /* PencilInteractionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilInteractionController.swift; sourceTree = "<group>"; };
+		D10000000000000000000117 /* PencilShortcutPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilShortcutPalette.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,7 +139,7 @@
 				A00000000000000000000206 /* AgentHarness */,
 				A00000000000000000000207 /* Knowledge */,
 				A00000000000000000000209 /* DeveloperSupport */,
-				A0000000000000000000020A /* Notebook */,
+				D10000000000000000000201 /* Notebook */,
 			);
 			path = TuberNotes;
 			sourceTree = "<group>";
@@ -115,6 +149,8 @@
 			children = (
 				A00000000000000000000101 /* TuberNotesApp.swift */,
 				A00000000000000000000102 /* RootView.swift */,
+				A0000000000000000000020A /* Contracts */,
+				C00000000000000000000201 /* Persistence */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -124,9 +160,10 @@
 			children = (
 				A00000000000000000000103 /* SpatialCanvasView.swift */,
 				A00000000000000000000104 /* PencilCanvas.swift */,
-				A00000000000000000000110 /* PDFStrokeCompression.swift */,
-				A00000000000000000000111 /* TuberNoteArchive.swift */,
-				A00000000000000000000113 /* DrawingRefinementOverlay.swift */,
+				A00000000000000000000128 /* MagicLasso.swift */,
+				D10000000000000000000104 /* DrawingRefinementOverlay.swift */,
+				D10000000000000000000105 /* PDFStrokeCompression.swift */,
+				D10000000000000000000106 /* TuberNoteArchive.swift */,
 			);
 			path = SpatialCanvas;
 			sourceTree = "<group>";
@@ -136,8 +173,8 @@
 			children = (
 				A00000000000000000000105 /* Pin.swift */,
 				A00000000000000000000106 /* PinOverlayView.swift */,
-				A0000000000000000000010E /* ConversationLayer.swift */,
-				A0000000000000000000010F /* ConversationLayerOverlayView.swift */,
+				D10000000000000000000102 /* ConversationLayer.swift */,
+				D10000000000000000000103 /* ConversationLayerOverlayView.swift */,
 			);
 			path = Pins;
 			sourceTree = "<group>";
@@ -146,7 +183,10 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000107 /* AgentClient.swift */,
-				A00000000000000000000112 /* DrawingRefinementClient.swift */,
+				A00000000000000000000117 /* ResponsesSSEDecoder.swift */,
+				A00000000000000000000118 /* DebugCodexTransport.swift */,
+				A00000000000000000000119 /* DebugCodexAgentClient.swift */,
+				D10000000000000000000101 /* DrawingRefinementClient.swift */,
 			);
 			path = AgentHarness;
 			sourceTree = "<group>";
@@ -174,27 +214,54 @@
 				A0000000000000000000010A /* PenFixture.swift */,
 				A0000000000000000000010C /* AgentInteractionSession.swift */,
 				A0000000000000000000010D /* AgentRequestBanner.swift */,
+				A00000000000000000000114 /* FeedbackThread.swift */,
+				A00000000000000000000115 /* FeedbackThreadSession.swift */,
+				A00000000000000000000116 /* FeedbackThreadViews.swift */,
 			);
 			path = DeveloperSupport;
 			sourceTree = "<group>";
 		};
-		A0000000000000000000020A /* Notebook */ = {
+		A0000000000000000000020A /* Contracts */ = {
 			isa = PBXGroup;
 			children = (
-				A0000000000000000000011C /* AgentInsight.swift */,
-				A0000000000000000000011D /* AgentSidebarView.swift */,
-				A0000000000000000000011E /* GlassStyle.swift */,
-				A00000000000000000000114 /* LibraryView.swift */,
-				A00000000000000000000115 /* Notebook.swift */,
-				A00000000000000000000116 /* NotebookCanvas.swift */,
-				A00000000000000000000117 /* NotebookStore.swift */,
-				A00000000000000000000118 /* NotebookToolbar.swift */,
-				A00000000000000000000119 /* NotebookView.swift */,
-				A0000000000000000000011A /* NotebookViewModel.swift */,
-				A0000000000000000000011B /* PageFlipOverlay.swift */,
-				A0000000000000000000011F /* PageStripView.swift */,
-				A00000000000000000000120 /* PageTemplate.swift */,
-				7F5948BB300DC2BE006B983D /* AmbientBackground.swift */,
+				A0000000000000000000010E /* DocumentContracts.swift */,
+				A0000000000000000000010F /* SpatialContracts.swift */,
+				A00000000000000000000110 /* PinContracts.swift */,
+				A00000000000000000000111 /* InteractionContracts.swift */,
+				A00000000000000000000112 /* AgentContracts.swift */,
+				A00000000000000000000113 /* KnowledgeContracts.swift */,
+			);
+			path = Contracts;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000201 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000101 /* DocumentStore.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000201 /* Notebook */ = {
+			isa = PBXGroup;
+			children = (
+				D10000000000000000000107 /* AgentInsight.swift */,
+				D10000000000000000000108 /* AgentSidebarView.swift */,
+				D10000000000000000000109 /* AmbientBackground.swift */,
+				D1000000000000000000010A /* GlassStyle.swift */,
+				D1000000000000000000010B /* LibraryView.swift */,
+				D1000000000000000000010C /* Notebook.swift */,
+				D1000000000000000000010D /* NotebookCanvas.swift */,
+				D1000000000000000000010E /* NotebookStore.swift */,
+				D1000000000000000000010F /* NotebookToolbar.swift */,
+				D10000000000000000000110 /* NotebookView.swift */,
+				D10000000000000000000111 /* NotebookViewModel.swift */,
+				D10000000000000000000112 /* PageFlipOverlay.swift */,
+				D10000000000000000000113 /* PageStripView.swift */,
+				D10000000000000000000114 /* PageTemplate.swift */,
+				D10000000000000000000115 /* NotebookUndoBridge.swift */,
+				D10000000000000000000116 /* PencilInteractionController.swift */,
+				D10000000000000000000117 /* PencilShortcutPalette.swift */,
 			);
 			path = Notebook;
 			sourceTree = "<group>";
@@ -271,6 +338,7 @@
 				A00000000000000000000002 /* RootView.swift in Sources */,
 				A00000000000000000000003 /* SpatialCanvasView.swift in Sources */,
 				A00000000000000000000004 /* PencilCanvas.swift in Sources */,
+				A00000000000000000000028 /* MagicLasso.swift in Sources */,
 				A00000000000000000000005 /* Pin.swift in Sources */,
 				A00000000000000000000006 /* PinOverlayView.swift in Sources */,
 				A00000000000000000000007 /* AgentClient.swift in Sources */,
@@ -279,26 +347,42 @@
 				A0000000000000000000000A /* PenFixture.swift in Sources */,
 				A0000000000000000000000C /* AgentInteractionSession.swift in Sources */,
 				A0000000000000000000000D /* AgentRequestBanner.swift in Sources */,
-				A0000000000000000000000E /* ConversationLayer.swift in Sources */,
-				A0000000000000000000000F /* ConversationLayerOverlayView.swift in Sources */,
-				A00000000000000000000010 /* PDFStrokeCompression.swift in Sources */,
-				A00000000000000000000011 /* TuberNoteArchive.swift in Sources */,
-				A00000000000000000000012 /* DrawingRefinementClient.swift in Sources */,
-				A00000000000000000000013 /* DrawingRefinementOverlay.swift in Sources */,
-				7F5948BC300DC2BE006B983D /* AmbientBackground.swift in Sources */,
-				A00000000000000000000014 /* LibraryView.swift in Sources */,
-				A00000000000000000000015 /* Notebook.swift in Sources */,
-				A00000000000000000000016 /* NotebookCanvas.swift in Sources */,
-				A00000000000000000000017 /* NotebookStore.swift in Sources */,
-				A00000000000000000000018 /* NotebookToolbar.swift in Sources */,
-				A00000000000000000000019 /* NotebookView.swift in Sources */,
-				A0000000000000000000001A /* NotebookViewModel.swift in Sources */,
-				A0000000000000000000001B /* PageFlipOverlay.swift in Sources */,
-				A0000000000000000000001C /* AgentInsight.swift in Sources */,
-				A0000000000000000000001D /* AgentSidebarView.swift in Sources */,
-				A0000000000000000000001E /* GlassStyle.swift in Sources */,
-				A0000000000000000000001F /* PageStripView.swift in Sources */,
-				A00000000000000000000020 /* PageTemplate.swift in Sources */,
+				A0000000000000000000000E /* DocumentContracts.swift in Sources */,
+				A0000000000000000000000F /* SpatialContracts.swift in Sources */,
+				A00000000000000000000010 /* PinContracts.swift in Sources */,
+				A00000000000000000000011 /* InteractionContracts.swift in Sources */,
+				A00000000000000000000012 /* AgentContracts.swift in Sources */,
+				A00000000000000000000013 /* KnowledgeContracts.swift in Sources */,
+				A00000000000000000000014 /* FeedbackThread.swift in Sources */,
+				A00000000000000000000015 /* FeedbackThreadSession.swift in Sources */,
+				A00000000000000000000016 /* FeedbackThreadViews.swift in Sources */,
+				A00000000000000000000017 /* ResponsesSSEDecoder.swift in Sources */,
+				A00000000000000000000018 /* DebugCodexTransport.swift in Sources */,
+				A00000000000000000000019 /* DebugCodexAgentClient.swift in Sources */,
+				C00000000000000000000001 /* DocumentStore.swift in Sources */,
+				D10000000000000000000001 /* DrawingRefinementClient.swift in Sources */,
+				D10000000000000000000002 /* ConversationLayer.swift in Sources */,
+				D10000000000000000000003 /* ConversationLayerOverlayView.swift in Sources */,
+				D10000000000000000000004 /* DrawingRefinementOverlay.swift in Sources */,
+				D10000000000000000000005 /* PDFStrokeCompression.swift in Sources */,
+				D10000000000000000000006 /* TuberNoteArchive.swift in Sources */,
+				D10000000000000000000007 /* AgentInsight.swift in Sources */,
+				D10000000000000000000008 /* AgentSidebarView.swift in Sources */,
+				D10000000000000000000009 /* AmbientBackground.swift in Sources */,
+				D1000000000000000000000A /* GlassStyle.swift in Sources */,
+				D1000000000000000000000B /* LibraryView.swift in Sources */,
+				D1000000000000000000000C /* Notebook.swift in Sources */,
+				D1000000000000000000000D /* NotebookCanvas.swift in Sources */,
+				D1000000000000000000000E /* NotebookStore.swift in Sources */,
+				D1000000000000000000000F /* NotebookToolbar.swift in Sources */,
+				D10000000000000000000010 /* NotebookView.swift in Sources */,
+				D10000000000000000000011 /* NotebookViewModel.swift in Sources */,
+				D10000000000000000000012 /* PageFlipOverlay.swift in Sources */,
+				D10000000000000000000013 /* PageStripView.swift in Sources */,
+				D10000000000000000000014 /* PageTemplate.swift in Sources */,
+				D10000000000000000000015 /* NotebookUndoBridge.swift in Sources */,
+				D10000000000000000000016 /* PencilInteractionController.swift in Sources */,
+				D10000000000000000000017 /* PencilShortcutPalette.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,10 +436,9 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 632Q9LT7K2;
+				DEVELOPMENT_TEAM = AX444DZQ8V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = TuberNotes;
-				INFOPLIST_KEY_TuberRefinementEndpoint = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -363,7 +446,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.claire.tubernotes.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tubernotes.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -380,10 +463,9 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 632Q9LT7K2;
+				DEVELOPMENT_TEAM = AX444DZQ8V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = TuberNotes;
-				INFOPLIST_KEY_TuberRefinementEndpoint = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -391,7 +473,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.claire.tubernotes.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tubernotes.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

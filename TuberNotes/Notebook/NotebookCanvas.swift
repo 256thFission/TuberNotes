@@ -6,11 +6,11 @@ import UIKit
 /// PencilKit canvas, and the lasso overlay share one zooming content view.
 ///
 /// The lasso works like a traditional lasso: loop around strokes to select them,
-/// then drag inside to move them. The selection's region is also what the
-/// assistant analyzes when you tap "Analyze selection".
+/// then drag inside to move them.
 struct NotebookCanvas: UIViewRepresentable {
     let pageID: UUID
     let drawingData: Data
+    let backgroundDrawingData: Data
     let tool: WritingTool
     let color: UIColor
     let width: CGFloat
@@ -23,14 +23,25 @@ struct NotebookCanvas: UIViewRepresentable {
     let images: [PlacedImage]
     let isArrangingImages: Bool
     let selectedImageID: UUID?
+    let isPageLocked: Bool
+    let undo: NotebookUndoBridge
+    let pencilDoubleTapEnabled: Bool
+    let pencilSqueezeEnabled: Bool
+    let pencilHoverPreviewEnabled: Bool
     var onChange: (Data) -> Void
+    var onPencilToggleEraser: () -> Void
+    var onPencilSwapTool: () -> Void
+    /// Point is in global screen space so the SwiftUI layer can clamp the
+    /// palette independently of page padding, pan, and zoom.
+    var onPencilShowPalette: (CGPoint, Bool) -> Void
     var onLongPress: () -> Void
     var onZoomChanged: (CGFloat) -> Void
     var onLassoChanged: (CGRect?) -> Void
     var onImagesChanged: ([PlacedImage]) -> Void
     var onSelectImage: (UUID?) -> Void
-    var onFlipChanged: (CGFloat) -> Void   // live horizontal finger translation
-    var onFlipEnded: (CGFloat, CGFloat) -> Void   // final translation, velocity
+    var onFlipChanged: (CGFloat) -> Void
+    var onFlipEnded: (CGFloat, CGFloat) -> Void
+    var onPageViewportChange: (CGRect) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -40,6 +51,8 @@ struct NotebookCanvas: UIViewRepresentable {
         view.canvasView.delegate = context.coordinator
         view.canvasView.tool = tool.pkTool(color: color, width: width)
         view.paperView.template = template
+        view.setBackgroundDrawingData(backgroundDrawingData)
+        view.onPageViewportChange = onPageViewportChange
 
         let c = context.coordinator
         view.lassoView.onLoopComplete = { [weak c, weak view] points in c?.completeLasso(points, view) }
@@ -56,6 +69,28 @@ struct NotebookCanvas: UIViewRepresentable {
             c?.straighten(from: start, to: end, in: view)
         }
 
+        view.hoverRecognizer.addTarget(context.coordinator, action: #selector(Coordinator.hover(_:)))
+
+        let pencil = view.pencilController
+        pencil.onToggleEraser = { [weak c] in c?.parent.onPencilToggleEraser() }
+        pencil.onSwapPreviousTool = { [weak c] in c?.parent.onPencilSwapTool() }
+        pencil.onShowColorPalette = { [weak c, weak view] point in
+            guard let c, let view else { return }
+            c.parent.onPencilShowPalette(view.convertToScreen(point), true)
+        }
+        pencil.onSqueeze = { [weak c, weak view] point in
+            guard let c, let view else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            c.parent.onPencilShowPalette(view.convertToScreen(point), false)
+        }
+        pencil.fallbackPoint = { [weak c, weak view] in
+            guard let view else { return .zero }
+            if let lastPoint = c?.lastHoverPoint {
+                return view.contentView.convert(lastPoint, to: view)
+            }
+            return CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        }
+
         let longPress = UILongPressGestureRecognizer(
             target: context.coordinator, action: #selector(Coordinator.longPress(_:))
         )
@@ -64,15 +99,14 @@ struct NotebookCanvas: UIViewRepresentable {
         longPress.delegate = context.coordinator
         view.scrollView.addGestureRecognizer(longPress)
 
-        // Pencil must never scroll the page — only draw. Restrict the scroll
-        // view's pan to finger touches (in both finger-drawing modes).
+        // Pencil always belongs to the drawing surface; page pan and turn
+        // gestures accept direct (finger) touches only.
         let fingerOnly = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         view.scrollView.panGestureRecognizer.allowedTouchTypes = fingerOnly
 
-        // Finger horizontal drag interactively slides between pages (GoodNotes
-        // style). Finger only; gated to base zoom + horizontal in the delegate.
         let flipPan = UIPanGestureRecognizer(
-            target: context.coordinator, action: #selector(Coordinator.handleFlipPan(_:))
+            target: context.coordinator,
+            action: #selector(Coordinator.handleFlipPan(_:))
         )
         flipPan.allowedTouchTypes = fingerOnly
         flipPan.maximumNumberOfTouches = 1
@@ -80,9 +114,12 @@ struct NotebookCanvas: UIViewRepresentable {
         view.scrollView.addGestureRecognizer(flipPan)
         context.coordinator.flipPan = flipPan
 
+        view.undoBridge = undo
+
         applyMode(to: view)
         context.coordinator.load(drawingData, pageID: pageID, into: view)
         view.scrollView.setZoomScale(zoomScale, animated: false)
+        DispatchQueue.main.async { view.reportPageViewport() }
         return view
     }
 
@@ -94,26 +131,21 @@ struct NotebookCanvas: UIViewRepresentable {
             view.paperView.setNeedsDisplay()
         }
         view.imageLayer.setImages(images)
+        view.setBackgroundDrawingData(backgroundDrawingData)
+        view.onPageViewportChange = onPageViewportChange
         applyMode(to: view)
         if !isLassoActive || lassoRect == nil {
             view.lassoView.clear()
             context.coordinator.clearLassoSelection()
         }
-        if context.coordinator.loadedPageID != pageID {
+        if context.coordinator.loadedPageID != pageID
+            || context.coordinator.loadedDrawingData != drawingData {
             context.coordinator.load(drawingData, pageID: pageID, into: view)
         }
-        // Only push a zoom change to the scroll view when it came from *outside*
-        // the scroll view (the − / % / + buttons). While the user is pinching —
-        // or right after, when our own onZoomChanged echoes back through the
-        // binding — we must not re-set the scale, or it fights the gesture and
-        // jitters. `isSyncingZoom` suppresses that echo.
-        let c = context.coordinator
-        if !c.isUserZooming, !c.isSyncingZoom,
-           abs(view.scrollView.zoomScale - zoomScale) > 0.001 {
-            c.isSyncingZoom = true
-            view.scrollView.setZoomScale(zoomScale, animated: false)
-            DispatchQueue.main.async { c.isSyncingZoom = false }
-        }
+        // Viewport reporting re-enters this update on every pinch frame. The
+        // bound scale intentionally settles when the gesture ends, so never
+        // feed that temporarily stale value back into the active UIKit zoom.
+        context.coordinator.applyBoundZoomScale(zoomScale, to: view)
     }
 
     private func applyMode(to view: ZoomablePageView) {
@@ -128,10 +160,20 @@ struct NotebookCanvas: UIViewRepresentable {
 
         let interacting = isLassoActive || isArrangingImages
         view.canvasView.isUserInteractionEnabled = !interacting
-        view.scrollView.isScrollEnabled = !interacting
+        view.scrollView.isScrollEnabled = !interacting && !isPageLocked
+        view.scrollView.pinchGestureRecognizer?.isEnabled = !interacting && !isPageLocked
 
         view.straightenRecognizer.acceptsFinger = fingerDrawing
         view.straightenRecognizer.isEnabled = snapStraight && !interacting && tool != .eraser
+
+        view.pencilController.isDoubleTapEnabled = pencilDoubleTapEnabled
+        view.pencilController.isSqueezeEnabled = pencilSqueezeEnabled
+
+        let showsHoverPreview = pencilHoverPreviewEnabled
+            && PencilInteractionController.prefersHoverPreview
+            && !interacting
+        view.hoverRecognizer.isEnabled = showsHoverPreview
+        if !showsHoverPreview { view.hoverPreview.hide() }
     }
 
     final class Coordinator: NSObject, PKCanvasViewDelegate, UIScrollViewDelegate, UIGestureRecognizerDelegate {
@@ -139,28 +181,87 @@ struct NotebookCanvas: UIViewRepresentable {
         weak var view: ZoomablePageView?
         weak var flipPan: UIPanGestureRecognizer?
         private(set) var loadedPageID: UUID?
-        var isUserZooming = false     // set while a pinch is in flight
-        var isSyncingZoom = false     // suppresses the binding echo after a zoom
+        private(set) var loadedDrawingData = Data()
         private var isLoading = false
         private var isProgrammatic = false
+        private(set) var isUserZooming = false
+        private var programmaticZoomTarget: CGFloat?
         private var lassoSelection: [Int] = []
         private var movingStrokes: [PKStroke] = []
         private var moveTranslation: CGPoint = .zero
+        private var preMoveDrawing: PKDrawing?
+        private(set) var lastHoverPoint: CGPoint?
 
         init(_ parent: NotebookCanvas) { self.parent = parent }
 
         func load(_ data: Data, pageID: UUID, into view: ZoomablePageView) {
             self.view = view
             isLoading = true
-            view.canvasView.drawing = (try? PKDrawing(data: data)) ?? PKDrawing()
+            parent.undo.withoutRegistration {
+                view.canvasView.drawing = (try? PKDrawing(data: data)) ?? PKDrawing()
+            }
+            parent.undo.reset()
             loadedPageID = pageID
+            loadedDrawingData = data
             lassoSelection = []
             DispatchQueue.main.async { self.isLoading = false }
         }
 
+        /// Replaces the active drawing as one undoable operation. Undo calls
+        /// back through the same path, which registers the matching redo.
+        func applyDrawing(_ drawing: PKDrawing, to view: ZoomablePageView, actionName: String) {
+            let previousDrawing = view.canvasView.drawing
+            parent.undo.withoutRegistration {
+                isProgrammatic = true
+                view.canvasView.drawing = drawing
+                isProgrammatic = false
+            }
+
+            parent.undo.manager.registerUndo(withTarget: self) { target in
+                target.applyDrawing(previousDrawing, to: view, actionName: actionName)
+            }
+            parent.undo.manager.setActionName(actionName)
+
+            let data = drawing.dataRepresentation()
+            loadedDrawingData = data
+            parent.onChange(data)
+        }
+
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             guard !isLoading, !isProgrammatic else { return }
-            parent.onChange(canvasView.drawing.dataRepresentation())
+            let data = canvasView.drawing.dataRepresentation()
+            loadedDrawingData = data
+            parent.onChange(data)
+        }
+
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            view?.hoverPreview.hide()
+        }
+
+        func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {}
+
+        @objc func hover(_ recognizer: UIHoverGestureRecognizer) {
+            guard let view else { return }
+            switch recognizer.state {
+            case .began, .changed:
+                // Trackpad and pointer hover report no Pencil distance.
+                guard recognizer.zOffset > 0 else {
+                    view.hoverPreview.hide()
+                    return
+                }
+                let point = recognizer.location(in: view.contentView)
+                lastHoverPoint = point
+                view.hoverPreview.show(
+                    at: point,
+                    tool: parent.tool,
+                    color: parent.color,
+                    width: parent.width
+                )
+            case .ended, .cancelled, .failed:
+                view.hoverPreview.hide()
+            default:
+                break
+            }
         }
 
         // MARK: Lasso (select + move)
@@ -209,9 +310,12 @@ struct NotebookCanvas: UIViewRepresentable {
             remaining.strokes = drawing.strokes.enumerated()
                 .filter { !lassoSelection.contains($0.offset) }
                 .map { $0.element }
-            isProgrammatic = true
-            view.canvasView.drawing = remaining
-            isProgrammatic = false
+            preMoveDrawing = drawing
+            parent.undo.withoutRegistration {
+                isProgrammatic = true
+                view.canvasView.drawing = remaining
+                isProgrammatic = false
+            }
 
             movingStrokes = selected
             moveTranslation = .zero
@@ -235,15 +339,27 @@ struct NotebookCanvas: UIViewRepresentable {
             for i in moved.indices { moved[i].transform = moved[i].transform.concatenating(translate) }
             drawing.strokes.append(contentsOf: moved)
 
-            isProgrammatic = true
-            view.canvasView.drawing = drawing
-            isProgrammatic = false
+            parent.undo.withoutRegistration {
+                isProgrammatic = true
+                view.canvasView.drawing = drawing
+                isProgrammatic = false
+            }
+
+            if let drawingBeforeMove = preMoveDrawing {
+                parent.undo.manager.registerUndo(withTarget: self) { target in
+                    target.applyDrawing(drawingBeforeMove, to: view, actionName: "Move Selection")
+                }
+                parent.undo.manager.setActionName("Move Selection")
+            }
+            preMoveDrawing = nil
 
             lassoSelection = Array(baseCount..<drawing.strokes.count)
             view.moveImageView.isHidden = true
             view.moveImageView.image = nil
             movingStrokes = []
-            parent.onChange(drawing.dataRepresentation())
+            let data = drawing.dataRepresentation()
+            loadedDrawingData = data
+            parent.onChange(data)
 
             var rect = CGRect.null
             for i in lassoSelection where drawing.strokes.indices.contains(i) {
@@ -289,64 +405,80 @@ struct NotebookCanvas: UIViewRepresentable {
                 let path = PKStrokePath(controlPoints: [point(start, 0), point(end, 0.05)], creationDate: Date())
                 drawing.strokes.append(PKStroke(ink: ink, path: path))
 
-                self.isProgrammatic = true
-                view.canvasView.drawing = drawing
-                self.isProgrammatic = false
-                p.onChange(drawing.dataRepresentation())
+                self.applyDrawing(drawing, to: view, actionName: "Straighten")
             }
         }
 
         // MARK: Zoom
 
-        func viewForZooming(in scrollView: UIScrollView) -> UIView? { view?.contentView }
-
-        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
-            isUserZooming = true
+        func applyBoundZoomScale(_ scale: CGFloat, to view: ZoomablePageView) {
+            guard !isUserZooming,
+                  abs(view.scrollView.zoomScale - scale) > 0.001 else { return }
+            if let programmaticZoomTarget,
+               abs(programmaticZoomTarget - scale) <= 0.001 {
+                return
+            }
+            programmaticZoomTarget = scale
+            view.scrollView.setZoomScale(scale, animated: true)
         }
 
-        func scrollViewDidZoom(_ scrollView: UIScrollView) { view?.recenter() }
-
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? { view?.contentView }
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            programmaticZoomTarget = nil
+            isUserZooming = true
+        }
+        func scrollViewDidScroll(_ scrollView: UIScrollView) { view?.reportPageViewport() }
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            // Do not mutate contentInset while UIKit is actively zooming.  The
+            // inset participates in the scroll view's geometry, so changing it
+            // on every pinch frame makes the page and its layers visibly jump.
+            // Insets are refreshed at layout/gesture boundaries instead.
+            view?.reportPageViewport()
+            if let programmaticZoomTarget,
+               abs(scrollView.zoomScale - programmaticZoomTarget) <= 0.001 {
+                self.programmaticZoomTarget = nil
+            }
+        }
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            programmaticZoomTarget = nil
             isUserZooming = false
-            // Report the final scale, but mark it as our own so the resulting
-            // binding update doesn't bounce back into setZoomScale.
-            isSyncingZoom = true
+            self.view?.recenter()
             parent.onZoomChanged(scale)
-            DispatchQueue.main.async { self.isSyncingZoom = false }
         }
 
         @objc func longPress(_ gr: UILongPressGestureRecognizer) {
             if gr.state == .began { parent.onLongPress() }
         }
 
-        @objc func handleFlipPan(_ gr: UIPanGestureRecognizer) {
-            // Measure against the window so our own SwiftUI offset of the page
-            // (driven by these callbacks) can't feed back into the translation.
-            let ref = gr.view?.window
-            let tx = gr.translation(in: ref).x
-            switch gr.state {
+        @objc func handleFlipPan(_ recognizer: UIPanGestureRecognizer) {
+            // Window-relative translation is stable while SwiftUI offsets the
+            // canvas in response to this gesture.
+            let referenceView = recognizer.view?.window
+            let translation = recognizer.translation(in: referenceView).x
+            switch recognizer.state {
             case .began, .changed:
-                parent.onFlipChanged(tx)
+                parent.onFlipChanged(translation)
             case .ended:
-                parent.onFlipEnded(tx, gr.velocity(in: ref).x)
+                parent.onFlipEnded(translation, recognizer.velocity(in: referenceView).x)
             case .cancelled, .failed:
-                parent.onFlipEnded(tx, 0)
+                parent.onFlipEnded(translation, 0)
             default:
                 break
             }
         }
 
-        /// Let the flip pan begin only when the page fits the screen (≤100%),
-        /// the gesture is horizontal-dominant, and we're not lassoing / arranging
-        /// / finger-drawing — otherwise a drag should pan, scroll, or draw.
-        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard let pan = g as? UIPanGestureRecognizer, pan === flipPan else { return true }
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer,
+                  pan === flipPan else { return true }
             guard let scrollView = view?.scrollView else { return false }
-            let fitsScreen = scrollView.zoomScale <= 1.0 + 0.02
-            let interacting = parent.isLassoActive || parent.isArrangingImages || parent.fingerDrawing
-            guard fitsScreen, !interacting else { return false }
-            let v = pan.velocity(in: pan.view)
-            return abs(v.x) > abs(v.y) * 1.2
+            let pageFitsViewport = scrollView.zoomScale <= 1.02
+            let hasCompetingMode = parent.isLassoActive
+                || parent.isArrangingImages
+                || parent.fingerDrawing
+                || parent.isPageLocked
+            guard pageFitsViewport, !hasCompetingMode else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y) * 1.2
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
@@ -558,10 +690,20 @@ final class ZoomablePageView: UIView {
     let contentView = UIView()
     let paperView = PaperSheetView()
     let imageLayer = ImageLayerView()
+    let backgroundCanvasView = PKCanvasView()
     let canvasView = PKCanvasView()
+    let hoverPreview = InkHoverPreviewView()
     let moveImageView = UIImageView()
     let lassoView = LassoOverlayView()
     let straightenRecognizer = HoldStraightenRecognizer()
+    let hoverRecognizer = UIHoverGestureRecognizer()
+    let pencilController = PencilInteractionController()
+    var undoBridge: NotebookUndoBridge?
+    var onPageViewportChange: ((CGRect) -> Void)?
+    private var loadedBackgroundDrawingData = Data()
+    private var lastReportedPageViewport: CGRect?
+
+    override var undoManager: UndoManager? { undoBridge?.manager }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -596,6 +738,14 @@ final class ZoomablePageView: UIView {
         imageLayer.frame = contentView.bounds
         contentView.addSubview(imageLayer)
 
+        backgroundCanvasView.frame = contentView.bounds
+        backgroundCanvasView.backgroundColor = .clear
+        backgroundCanvasView.isOpaque = false
+        backgroundCanvasView.isScrollEnabled = false
+        backgroundCanvasView.isUserInteractionEnabled = false
+        backgroundCanvasView.overrideUserInterfaceStyle = .light
+        contentView.addSubview(backgroundCanvasView)
+
         canvasView.frame = contentView.bounds
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
@@ -607,6 +757,14 @@ final class ZoomablePageView: UIView {
         straightenRecognizer.delaysTouchesBegan = false
         straightenRecognizer.delaysTouchesEnded = false
         canvasView.addGestureRecognizer(straightenRecognizer)
+
+        hoverPreview.frame = contentView.bounds
+        contentView.addSubview(hoverPreview)
+
+        hoverRecognizer.cancelsTouchesInView = false
+        contentView.addGestureRecognizer(hoverRecognizer)
+
+        addInteraction(pencilController.interaction)
 
         moveImageView.isHidden = true
         moveImageView.isUserInteractionEnabled = false
@@ -623,6 +781,7 @@ final class ZoomablePageView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         recenter()
+        DispatchQueue.main.async { [weak self] in self?.reportPageViewport() }
     }
 
     func recenter() {
@@ -633,6 +792,75 @@ final class ZoomablePageView: UIView {
         let vInset = max(16, (scrollView.bounds.height - scaledH) / 2)
         scrollView.contentInset = UIEdgeInsets(top: vInset, left: hInset, bottom: 140, right: hInset)
     }
+
+    func convertToScreen(_ point: CGPoint) -> CGPoint {
+        convert(point, to: nil)
+    }
+
+    func setBackgroundDrawingData(_ data: Data) {
+        guard loadedBackgroundDrawingData != data else { return }
+        loadedBackgroundDrawingData = data
+        backgroundCanvasView.drawing = (try? PKDrawing(data: data)) ?? PKDrawing()
+    }
+
+    func reportPageViewport() {
+        let frame = convert(contentView.bounds, from: contentView)
+        guard frame.width > 0, frame.height > 0 else { return }
+        guard frame != lastReportedPageViewport else { return }
+        lastReportedPageViewport = frame
+        onPageViewportChange?(frame)
+    }
+}
+
+// MARK: - Hover ink preview
+
+/// Page-space preview of the active tool under a supported hovering Pencil.
+/// Keeping it inside the zooming content makes it follow pan and zoom without
+/// an additional coordinate transform.
+final class InkHoverPreviewView: UIView {
+    private let dot = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        dot.fillColor = UIColor.clear.cgColor
+        dot.strokeColor = UIColor.clear.cgColor
+        layer.addSublayer(dot)
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
+
+    func show(at point: CGPoint, tool: WritingTool, color: UIColor, width: CGFloat) {
+        let diameter = max(width, 2)
+        let rect = CGRect(
+            x: point.x - diameter / 2,
+            y: point.y - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        dot.path = UIBezierPath(ovalIn: rect).cgPath
+        switch tool {
+        case .eraser:
+            dot.fillColor = UIColor.clear.cgColor
+            dot.strokeColor = UIColor.label.withAlphaComponent(0.5).cgColor
+            dot.lineWidth = 1.5
+        case .marker:
+            dot.fillColor = color.withAlphaComponent(0.4).cgColor
+            dot.strokeColor = UIColor.clear.cgColor
+        case .pen, .pencil:
+            dot.fillColor = color.cgColor
+            dot.strokeColor = UIColor.clear.cgColor
+        }
+        CATransaction.commit()
+        isHidden = false
+    }
+
+    func hide() { isHidden = true }
 }
 
 // MARK: - Lasso overlay (loop to select, drag to move)
@@ -769,9 +997,7 @@ final class PaperSheetView: UIView {
 
         guard template.spacing > 0 else { return }
         let spacing = template.spacing
-        let lineColor = UIColor(red: 0.62, green: 0.72, blue: 0.88, alpha: 0.55)
 
-        // Dotted grid: a small filled dot at each grid intersection.
         if template.isDotted {
             let dotColor = UIColor(red: 0.55, green: 0.64, blue: 0.80, alpha: 0.75)
             ctx.setFillColor(dotColor.cgColor)
@@ -780,8 +1006,14 @@ final class PaperSheetView: UIView {
             while y < bounds.height {
                 var x = spacing
                 while x < bounds.width {
-                    ctx.fillEllipse(in: CGRect(x: x - radius, y: y - radius,
-                                               width: radius * 2, height: radius * 2))
+                    ctx.fillEllipse(
+                        in: CGRect(
+                            x: x - radius,
+                            y: y - radius,
+                            width: radius * 2,
+                            height: radius * 2
+                        )
+                    )
                     x += spacing
                 }
                 y += spacing
@@ -789,6 +1021,7 @@ final class PaperSheetView: UIView {
             return
         }
 
+        let lineColor = UIColor(red: 0.62, green: 0.72, blue: 0.88, alpha: 0.55)
         ctx.setStrokeColor(lineColor.cgColor)
         ctx.setLineWidth(1)
 

@@ -2,24 +2,24 @@ import SwiftUI
 import UIKit
 
 /// Process-stable clock. SwiftUI re-creates `AmbientBackground` on every publish
-/// from the view model (zoom, drawing, page changes); a per-instance `Date()`
-/// "start" would reset the animation phase each time — that was the "background
-/// jumps when you zoom/pan" bug. Anchoring to one static epoch keeps the motion
-/// continuous no matter how often the view is rebuilt.
+/// from the view model (zoom, drawing, page changes), and a per-instance
+/// `Date()` "start" would reset the animation phase each time — that was the
+/// "background jumps when you zoom/pan" bug. Anchoring to one static epoch keeps
+/// the motion continuous no matter how often the view is rebuilt.
 enum AmbientClock {
     static let epoch = Date()
     static var now: TimeInterval { Date().timeIntervalSince(epoch) }
 }
 
-/// A ripple spawned by a touch somewhere over the page.
+/// A ripple spawned by an Apple Pencil touch over the editor.
 struct AmbientRipple: Identifiable {
     let id = UUID()
     let center: CGPoint
     let start: TimeInterval   // seconds since AmbientClock.epoch
 }
 
-/// Shared, observable ripple source. A passive touch observer higher up feeds
-/// touch locations here; the backdrop renders them. Kept sparse and gentle.
+/// Shared, observable ripple source. A passive touch observer higher in the
+/// view tree feeds Pencil locations here while the backdrop renders them.
 @MainActor
 final class AmbientRippleModel: ObservableObject {
     @Published private(set) var ripples: [AmbientRipple] = []
@@ -29,8 +29,8 @@ final class AmbientRippleModel: ObservableObject {
 
     func add(at point: CGPoint) {
         let now = AmbientClock.now
-        // Fine cadence so a moving Pencil leaves a smooth, overlapping trail
-        // rather than discrete pops.
+        // Fine cadence makes a moving Pencil leave a continuous glow instead
+        // of a row of discrete rings.
         if now - lastTime < 0.035, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < 16 {
             return
         }
@@ -43,17 +43,16 @@ final class AmbientRippleModel: ObservableObject {
 }
 
 /// Minimal, soothing backdrop: black with a few slow, breathing white/grey
-/// blotches that drift, plus very soft ripples where the page is touched.
+/// blotches that drift around, plus soft ripples wherever the page is touched.
 /// Frosted panels blur this, which is what gives them their glassy look.
 struct AmbientBackground: View {
     @ObservedObject var rippleModel: AmbientRippleModel
-
-    private let lifetime: TimeInterval = 1.1
 
     private struct Blob {
         let baseX, baseY, radius, driftX, driftY, driftSpeed, breathSpeed, phase, alpha: CGFloat
     }
 
+    // Wider drift + slightly quicker so the motion reads a touch more, still calm.
     private let blobs: [Blob] = [
         Blob(baseX: 0.20, baseY: 0.18, radius: 320, driftX: 86, driftY: 64, driftSpeed: 0.075, breathSpeed: 0.55, phase: 0.0, alpha: 0.30),
         Blob(baseX: 0.82, baseY: 0.14, radius: 280, driftX: 74, driftY: 80, driftSpeed: 0.063, breathSpeed: 0.47, phase: 1.4, alpha: 0.20),
@@ -68,7 +67,6 @@ struct AmbientBackground: View {
             Canvas { ctx, size in
                 ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black))
 
-                // Breathing ombré blotches (heavily blurred).
                 ctx.drawLayer { layer in
                     layer.addFilter(.blur(radius: 48))
                     for blob in blobs {
@@ -86,21 +84,22 @@ struct AmbientBackground: View {
                     }
                 }
 
-                // Ripples: soft blurred blooms with a smooth fade-in/out, spawned
-                // closely along the Pencil so they overlap into a fluid glow that
-                // melts into the ombré — no hard rings.
                 if !rippleModel.ripples.isEmpty {
                     ctx.drawLayer { layer in
                         layer.addFilter(.blur(radius: 18))
                         for ripple in rippleModel.ripples {
                             let age = t - ripple.start
-                            guard age >= 0, age <= lifetime else { continue }
-                            let p = age / lifetime
-                            let radius = 44 + CGFloat(p) * 70
-                            let env = sin(p * .pi)          // smooth 0 → 1 → 0
-                            let alpha = 0.06 * env
-                            let rect = CGRect(x: ripple.center.x - radius, y: ripple.center.y - radius,
-                                              width: radius * 2, height: radius * 2)
+                            guard age >= 0, age <= rippleModel.lifetime else { continue }
+                            let progress = age / rippleModel.lifetime
+                            let radius = 44 + CGFloat(progress) * 70
+                            let envelope = sin(progress * .pi)
+                            let alpha = 0.06 * envelope
+                            let rect = CGRect(
+                                x: ripple.center.x - radius,
+                                y: ripple.center.y - radius,
+                                width: radius * 2,
+                                height: radius * 2
+                            )
                             layer.fill(
                                 Path(ellipseIn: rect),
                                 with: .radialGradient(
@@ -109,7 +108,9 @@ struct AmbientBackground: View {
                                         .white.opacity(alpha * 0.35),
                                         .clear,
                                     ]),
-                                    center: ripple.center, startRadius: 0, endRadius: radius
+                                    center: ripple.center,
+                                    startRadius: 0,
+                                    endRadius: radius
                                 )
                             )
                         }
@@ -121,18 +122,16 @@ struct AmbientBackground: View {
     }
 }
 
-/// A *passive* touch observer. It installs a gesture recognizer on the window
-/// that reports every touch location (finger or Pencil) but never enters a
-/// recognized state and never cancels touches — so the page, tools, scroll view,
-/// and buttons all keep full priority and receive their touches normally.
+/// Passive touch observer. It installs a recognizer on the window that reports
+/// Pencil locations without ever recognizing or cancelling the drawing touch.
 struct AmbientTouchLayer: UIViewRepresentable {
     var onTouch: (CGPoint) -> Void
 
     func makeUIView(context: Context) -> ObserverView {
         let view = ObserverView()
         view.onTouch = onTouch
-        view.isUserInteractionEnabled = false   // never intercepts anything itself
         view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
         return view
     }
 
@@ -143,7 +142,7 @@ struct AmbientTouchLayer: UIViewRepresentable {
     final class ObserverView: UIView, UIGestureRecognizerDelegate {
         var onTouch: ((CGPoint) -> Void)?
         private weak var observedWindow: UIWindow?
-        private var recognizer: PassiveTouchRecognizer?
+        private var recognizer: PassivePencilTouchRecognizer?
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -155,7 +154,7 @@ struct AmbientTouchLayer: UIViewRepresentable {
             observedWindow = nil
 
             guard let window else { return }
-            let recognizer = PassiveTouchRecognizer(target: self, action: #selector(noop))
+            let recognizer = PassivePencilTouchRecognizer(target: self, action: #selector(noop))
             recognizer.referenceView = self
             recognizer.delegate = self
             recognizer.cancelsTouchesInView = false
@@ -164,20 +163,26 @@ struct AmbientTouchLayer: UIViewRepresentable {
             recognizer.onTouch = { [weak self] point in self?.onTouch?(point) }
             window.addGestureRecognizer(recognizer)
             self.recognizer = recognizer
-            self.observedWindow = window
+            observedWindow = window
         }
 
         @objc private func noop() {}
 
-        // Never block or be blocked by anything else.
-        func gestureRecognizer(_ g: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
-        func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool { true }
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool { true }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldReceive touch: UITouch
+        ) -> Bool { true }
     }
 }
 
-/// Observes touches without ever recognizing, so it can't steal input.
-final class PassiveTouchRecognizer: UIGestureRecognizer {
+/// Observes Pencil touches without entering a recognized state, so it cannot
+/// steal drawing, scrolling, page-turn, or toolbar input.
+final class PassivePencilTouchRecognizer: UIGestureRecognizer {
     var onTouch: ((CGPoint) -> Void)?
     weak var referenceView: UIView?
 
@@ -193,7 +198,7 @@ final class PassiveTouchRecognizer: UIGestureRecognizer {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesEnded(touches, with: event)
-        state = .failed   // reset cleanly; we never recognize
+        state = .failed
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
@@ -202,10 +207,8 @@ final class PassiveTouchRecognizer: UIGestureRecognizer {
     }
 
     private func report(_ touches: Set<UITouch>) {
-        guard let referenceView else { return }
-        // Pencil-only: finger touches are for scrolling/flipping and must not
-        // spawn ripples. A Pencil touch does (it isn't used to scroll).
-        guard let touch = touches.first(where: { $0.type == .pencil }) else { return }
+        guard let referenceView,
+              let touch = touches.first(where: { $0.type == .pencil }) else { return }
         onTouch?(touch.location(in: referenceView))
     }
 }

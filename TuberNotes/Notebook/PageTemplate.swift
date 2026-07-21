@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// Paper style for a page: plain, lined, grid, or dotted — each ruled/dotted
-/// style in 3 sizes.
+/// style in three sizes.
 enum PageTemplate: String, Codable, CaseIterable, Identifiable {
     case plain
     case linedLarge, linedMedium, linedSmall

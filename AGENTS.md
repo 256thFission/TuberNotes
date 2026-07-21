@@ -7,15 +7,23 @@ TuberNotes is a one-week iPad hackathon. Prioritize: (1) hero interaction qualit
 - Prefer the smallest implementation that proves the current milestone. For a small change, make a small change.
 - Do not rewrite working systems unnecessarily or create large test suites for trivial changes.
 - Compilation alone does not verify user-visible work; run and inspect it.
-- Work autonomously inside established architectural contracts. Shared contracts or architecture changes require human review.
+- Work autonomously inside established architectural contracts. A shared-contract change may be implemented without prior review, but the commit must carry a `CONTRACT:` prefix and a `Docs/Plan/PLAN.md` log entry naming the changed type and why — Phillip reviews after the fact and may roll back. Architecture-ownership changes still require Phillip first.
 - Never bypass OS security or permission boundaries.
 - Keep collaborator ownership clear: `App` integrates; `SpatialCanvas` owns Pencil/coordinates; `Pins` owns spatial UI; `AgentHarness` owns the in-product AI boundary; `Knowledge` owns retrieval; `DeveloperSupport` and `DeveloperTools` own fixtures/tooling.
 
-Codex, Skills, MCPs, Xcode, simulators, and fixtures are **development tooling**. The multimodal agent shipped inside TuberNotes and product tools such as `search_textbook`, `search_notebook`, and `place_pins` are **product runtime**. Never conflate their permissions, APIs, or responsibilities.
+Codex, Skills, MCPs, Xcode, physical-device harnesses, and fixtures are **development tooling**. The multimodal agent shipped inside TuberNotes and product tools such as `search_textbook`, `search_notebook`, and `place_pins` are **product runtime**. Never conflate their permissions, APIs, or responsibilities.
 
-Canonical workflow: `TuberNotes.xcodeproj`, scheme `TuberNotes`, simulator `iPad Pro 13-inch (M5)`. See `Docs/Development.md` and the repo Skills under `.codex/skills/`.
+Canonical workflow: pin an explicitly named connected physical iPad with `DeveloperTools/device-preflight.sh`, then use `TuberNotes.xcodeproj`, scheme `TuberNotes`, through that shared session. Build, install, launch, and inspect the pinned device; never discover or fall back to another target. See `Docs/DeviceWorkflow.md`, `Docs/Development.md`, and the repo Skills under `.codex/skills/`.
 
-Human Pencil capture and in-app review feedback go through Debug `DeveloperSupport` + `DeveloperTools/PencilFixtureMCP` (Skill: `human-device-loop`). The connected test device shows the agent prompt in a banner. The human draws and/or taps a verdict (`looks-good` / `needs-work` / `blocked`); an optional note is stored as `humanNotes`. No Mac-side file work. Details: `Docs/Development.md` § Human device loop.
+Human Pencil capture and in-app review feedback go through Debug `DeveloperSupport` + `DeveloperTools/PencilFixtureMCP` (Skill: `human-device-loop`). Conversational review uses active waiting while the turn is live, then a one-response event bridge to resume the originating Codex task; a one-minute task heartbeat is emergency fallback only when bridge arming fails. Authentic Pencil capture remains a separate one-stroke fixture protocol. The human works only in TuberNotes—no Mac-side file work. Details: `Docs/Development.md` § Human device loop.
+
+### Human review session contract
+
+- One guided review journey maps to one visible feedback session unless the human explicitly requests separate conversations. Queue, ownership, and protocol-conformance work stays out of that session.
+- Show the human only the current action and, when needed, one short question. Keep thread/request IDs, owner tokens, sequence cursors, lifecycle states, queue details, expected assertions, artifact paths, and test keys agent-side.
+- Ask for either an exact response needed to exercise behavior or a subjective verdict, never both in one step. Do not ask the human to judge mechanical facts the tooling can verify.
+- An event-bridge or fallback-heartbeat wake collects, acknowledges, records, and notifies before advancing. Advance only after the prior response is understood, recorded, and the next precondition is verified.
+- Pause the guided journey on an unmet precondition, ambiguous response, first failure, device/host state divergence, or human confusion. Do not ask the human for another action until the response is understood and recorded. When the failure is an authorized in-scope product defect, fix it, mechanically verify the fix, then resume the same blocked visible session; stop the implementation only when another stop condition applies. Never invent Pencil feel, visual taste, intent, or interaction judgments.
 
 ## Operating contract
 
@@ -24,7 +32,7 @@ Human Pencil capture and in-app review feedback go through Debug `DeveloperSuppo
 3. Use subagents only when explicitly requested, and only for independent bounded outputs with a concrete return contract. Keep architecture, integration, and final judgment with the coordinating agent.
 4. Treat build success as necessary but insufficient. Launch a deterministic scenario and inspect the result (`DeveloperTools/verify-scenario.sh` or the loop in `Docs/Development.md`).
 5. Return a compact evidence packet and artifact paths; keep full logs outside model context.
-6. Escalate shared contracts, architecture, permissions, external writes, secrets, irreversible actions, and human-only interaction judgments.
+6. Escalate architecture ownership, permissions, external writes, secrets, irreversible actions, and human-only interaction judgments. Shared-contract changes proceed under the `CONTRACT:` flag-and-log rule instead of stopping.
 7. After repeated verification failure, stop and report evidence instead of expanding scope or inventing workarounds.
 8. Turn recurrent failures into the smallest durable repo improvement that would have prevented them (rule → Skill → fixture/scenario → narrow check).
 
@@ -34,14 +42,14 @@ For substantial work, follow this loop and stop when the named condition is met:
 
 1. **Inspect / plan** — confirm objective, scope, non-goals, and acceptance evidence.
 2. **Bounded edit** — change only the files needed for the milestone.
-3. **Build** — canonical project/scheme/simulator; retain failure tails, not full logs in context.
+3. **Build** — canonical project/scheme on the explicitly named physical iPad; retain failure tails, not full logs in context.
 4. **Launch scenario** — pick scenarios from the change-type map in `Docs/Development.md`.
 5. **Mechanical visual verification** — clipping, overlap, crashes, missing state, Pin drift.
-6. **Identify human review** — Pencil feel, taste, architecture, or anything the scenario cannot prove. Prefer `human-device-loop` so the verdict/notes land as durable JSON.
+6. **Identify human review** — Pencil feel, taste, architecture, or anything the scenario cannot prove. Prefer `human-device-loop` so feedback messages, attachments, watch state, or Pencil fixtures land as durable evidence.
 7. **Final diff inspection** — reject unrelated churn, ownership violations, and speculative abstractions.
 8. **Stop** — report the evidence packet, artifact paths, and unresolved issues.
 
-Stop and report when: acceptance evidence is collected; a shared-contract or architecture change needs approval; verification fails twice without a narrower fix; or the next step would bypass a security/permission boundary.
+Stop and report when: acceptance evidence is collected; an architecture-ownership change needs approval; verification fails twice without a narrower fix; or the next step would bypass a security/permission boundary. Shared-contract changes do not stop work — flag and log them per the `CONTRACT:` rule.
 
 ## Evidence packet
 
@@ -54,7 +62,14 @@ For user-visible changes, end with this compact packet (template: `Docs/template
 - screenshot / artifact paths
 - console or crash status
 - mechanical checks performed
-- human-only checks still required (or collected via `human-device-loop`: request id, verdict, `humanNotes`, fixture path)
+- human-only checks still required (or collected via `human-device-loop`: feedback-thread/request ID, watch state and sequence, messages/attachments or verdict/notes, fixture path)
 - stop reason or unresolved issue
 
 Handoffs between sessions or models use `Docs/templates/Handoff.md`.
+
+## Current execution plan
+
+The long-running coordination document is `Docs/Plan/PLAN.md`. Every session
+works exactly one of its child work-line docs, then updates that child's
+Status and Session log plus the parent status board before stopping. Do not
+create new standalone handoff documents; append to the plan instead.

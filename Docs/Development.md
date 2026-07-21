@@ -4,20 +4,37 @@ Canonical configuration:
 
 - Project: `TuberNotes.xcodeproj`
 - Scheme: `TuberNotes`
-- Simulator: `iPad Pro 13-inch (M5)` on the newest installed iOS runtime
+- Destination: the physical iPad pinned by `DeveloperTools/device-preflight.sh`
 - Bundle ID: `com.tubernotes.app`
+
+The target and review lifecycle contract is `Docs/DeviceWorkflow.md`. Start each
+device session explicitly:
+
+```sh
+DeveloperTools/device-preflight.sh --device <device-id>
+```
+
+Commands must stop when the pinned iPad is unavailable, locked, untrusted,
+offline for developer-mode validation, or divergent from host state. They must
+never choose another target.
 
 Agent operating rules, checkpoints, and evidence requirements live in `AGENTS.md`.
 
 ## Preferred verification command
 
-For user-visible work, prefer the one-shot verifier (build → install → launch scenario → screenshot → artifact paths):
+For user-visible work, prefer the one-shot verifier (device build → install → launch scenario → pull runtime evidence → artifact paths):
 
 ```sh
 DeveloperTools/verify-scenario.sh fake-pin
 ```
 
-Artifacts land under `tmp/verify/<timestamp>-<scenario>/` and include `summary.txt`, `build.log`, `launch.log`, and `screenshot.png`. The script reports mechanical pass/fail only. It does not judge visual taste or Apple Pencil feel.
+Artifacts land under `tmp/verify/<timestamp>-<scenario>/` and include `summary.txt`, `build.log`, `install.log`, `launch.log`, `scenario-selection.json`, and required `runtime-rendered.json`. The script reports a narrow mechanical pass/fail for physical-device build/install/launch and nonce-matched app evidence. It does not capture the physical screen, collect an attached console or device crash report, automate navigation, judge visual taste, or judge Apple Pencil feel; report those checks separately.
+
+Show the exact M0 allowlist and expected states:
+
+```sh
+DeveloperTools/verify-scenario.sh --help
+```
 
 Reuse an existing build:
 
@@ -25,85 +42,206 @@ Reuse an existing build:
 SKIP_BUILD=1 DeveloperTools/verify-scenario.sh multi-pin
 ```
 
-End user-visible tasks with the evidence packet in `Docs/templates/EvidencePacket.md`. Use `Docs/templates/Handoff.md` when transferring work between sessions or models.
+Prove that mechanical failures produce a failing summary and a durable artifact without changing the normal app:
+
+```sh
+FORCE_MECHANICAL_FAILURE=1 SKIP_BUILD=1 \
+  DeveloperTools/verify-scenario.sh blank-canvas
+```
+
+This command is expected to exit nonzero. Its bundle includes `intentional-failure.txt`; later verifier runs remain normal because the failure is opt-in for that process only.
+
+End user-visible tasks with the evidence packet in `Docs/templates/EvidencePacket.md`. Use `Docs/templates/Handoff.md` when transferring work between sessions or models. When preparing a new device-review journey, start with the owning major-group guide in `Docs/ReviewGuides/README.md`.
 
 ## Scenario-to-change map
 
 | Change type | Required scenarios | Notes |
 |---|---|---|
 | Canvas / PencilKit drawing surface | `blank-canvas`; reviewed pen fixture when applicable | Confirm ink and paper without Pin clutter; use `human-device-loop` for authentic Pencil |
-| AI drawing refinement | `ai-refine` | Confirm lasso selection, action placement, and same-region raster overlay; backend/model response remains integration-specific |
-| Pin layout or spatial anchoring | `fake-pin` and `multi-pin` | Check deterministic positions and overlap |
+| PDF page surface | `pdf-pages` and `ink-pages` | Both scenarios are App-wired with stable page identity and page-local canned ink |
+| Blank notebook surface | `blank-notebook` and `notebook-pages` | Both scenarios are App-wired with stable navigation; verify App-owned page addition in `blank-notebook` |
+| Pin layout | `fake-pin`, `multi-pin`, and `edge-pins` | Check deterministic positions, overlap, and edge clipping |
 | App composition / root chrome | `blank-canvas`, `fake-pin`, and `multi-pin` | All three DEBUG states |
-| Coordinate / transform work | `fake-pin` and `multi-pin`, before and after viewport change | Once pan/zoom exists; use `spatial-debugging` Skill |
-| Human feel / taste / interaction quality | scenario that exposes the change | Mechanical verify first, then `request_human_review` |
+| Coordinate / transform work | `pin-drift` before and after viewport change | Use the deterministic `Change viewport` control and the `spatial-debugging` Skill |
+| Investigation / Pin conversation UI and agent event handling | `agent-recorded-success`, `agent-recorded-failure`, `hero-recorded`; add `pin-conversation` when conversation behavior changed and `agent-recorded-retrieval` when retrieval presentation changed | Recorded-path truthfulness plus the hero and Pin-tethered conversation compositions |
+| Persistence / document store | `persistence-relaunch` plus the surface scenario of the changed document type | Fixture-driven scenarios must stay deterministic |
+| Human feel / taste / interaction quality | scenario that exposes the change | Mechanical verify first, then create a feedback thread; use the morning queue for human-only checks |
 | Non-UI / pure contract text | none required | Still avoid product/runtime vs tooling confusion |
 
-Supported scenario values: `blank-canvas`, `fake-pin`, `multi-pin`, `ai-refine`. Default is `blank-canvas`.
+## Verification tiers — never run the full sweep by default
+
+The full 14/15-scenario sweep is a gate, not a loop. Costs are real: each run
+is an install/launch cycle on the one pinned iPad, and each summary is agent
+context.
+
+1. **Per-edit (the default):** only the change-map scenarios for the files you
+   touched — typically 1–3 runs, one build then `SKIP_BUILD=1`.
+2. **Pre-edit baseline:** do not re-sweep. The last green sweep recorded in
+   `Docs/Plan/PLAN.md` at the current commit IS the baseline; its artifacts
+   are under `tmp/verify/`. If HEAD moved since, run only the change-map
+   scenarios you are about to rely on.
+3. **Merge gate to `main`:** the union of change-map scenarios for everything
+   the branch touched, plus `blank-canvas` as smoke. Record the result and
+   commit hash in the plan log.
+4. **Full sweep:** only when the verifier/tooling itself changed, before the
+   M4 demo-candidate gate, or after a multi-line merge day — at most once per
+   day. Never as a per-session ritual.
+
+`persistence-relaunch` joins a sweep only once WL-C's acceptance gate has
+passed; before that it is WL-C's own gate, not regression baseline.
+
+Runnable verifier values are `blank-canvas`, `fake-pin`, `multi-pin`, `pdf-pages`, `blank-notebook`, `notebook-pages`, `ink-pages`, `lasso-crop`, `pin-drift`, `edge-pins`, `persistence-relaunch`, `agent-recorded-success`, `agent-recorded-retrieval`, `agent-recorded-failure`, `hero-recorded`, and `pin-conversation`. Default is `blank-canvas`.
+
+`DevelopmentScenario.fixture` owns stable documents, page IDs, page-specific `PenFixture` values, canned `PageAnnotation` values, expected state, and integration readiness. `blank-canvas`, `fake-pin`, and `multi-pin` are rendered by the current scaffold. The remaining runnable scenarios are rendered through the coordinator App integration seam. `hero-recorded` proves the real SpatialCanvas lasso/crop → recorded Check → Pin path; `pin-conversation` continues that retained selection through the recorded follow-up path and verifies the App-owned thread after a page-away/page-return cycle. A verifier PASS proves only the named mechanical runtime contract, not interaction taste or human-only gesture discoverability.
 
 ## Manual loop
 
 Open the project in Xcode for normal work. If XcodeBuildMCP is available to an agent, use it with the canonical values above. Otherwise keep terminal output concise:
 
 ```sh
+TUBER_DEVICE_ID="$(python3 DeveloperTools/device_session.py resolve)"
 xcodebuild -project TuberNotes.xcodeproj -scheme TuberNotes \
-  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5)' \
-  -derivedDataPath DerivedData build | tee /tmp/tubernotes-build.log | tail -n 40
+  -configuration Debug \
+  -destination "platform=iOS,id=$TUBER_DEVICE_ID" \
+  -derivedDataPath DerivedDataDevice \
+  build | tee /tmp/tubernotes-device-build.log | tail -n 40
 ```
 
-Boot, install, and launch the built app:
+Install and launch the built app on that same iPad:
 
 ```sh
-xcrun simctl boot 'iPad Pro 13-inch (M5)' 2>/dev/null || true
-open -a Simulator
-xcrun simctl install booted DerivedData/Build/Products/Debug-iphonesimulator/TuberNotes.app
-xcrun simctl launch --terminate-running-process booted com.tubernotes.app
+xcrun devicectl device install app \
+  --device "$TUBER_DEVICE_ID" \
+  DerivedDataDevice/Build/Products/Debug-iphoneos/TuberNotes.app
+xcrun devicectl device process launch \
+  --device "$TUBER_DEVICE_ID" \
+  --terminate-existing \
+  com.tubernotes.app
 ```
 
-For a scenario, prefix app variables with `SIMCTL_CHILD_`:
+For a scenario, pass device launch environment explicitly:
 
 ```sh
-SIMCTL_CHILD_TUBER_SCENARIO=fake-pin xcrun simctl launch --terminate-running-process booted com.tubernotes.app
+xcrun devicectl device process launch \
+  --device "$TUBER_DEVICE_ID" \
+  --terminate-existing \
+  --environment-variables '{"TUBER_SCENARIO":"fake-pin"}' \
+  com.tubernotes.app
 ```
 
-Xcode may instead pass `--scenario fake-pin`. Capture a screenshot when inspection must be shared:
+Xcode may instead pass `--scenario fake-pin`. A successful compile or runtime
+marker is insufficient verification of user-visible behavior: inspect the
+running iPad. When evidence must be shared, request a human-triggered screenshot
+through `human-device-loop`; the human previews and sends it from TuberNotes.
 
-```sh
-xcrun simctl io booted screenshot tmp/verify/manual-screenshot.png
-```
+## DEBUG live Codex adapter
 
-A successful compile is insufficient verification of user-visible behavior.
+The `hero-recorded` surface remains recorded unless DEBUG is launched with both
+`TUBER_AGENT_MODE=codex` and a temporary `TUBER_CODEX_ACCESS_TOKEN`. The direct
+wire-model default is exposed as `DebugCodexConfiguration.defaultModel` and is
+currently `gpt-5.6-terra`; `TUBER_CODEX_MODEL` may override it for a bounded
+comparison. `TUBER_CODEX_ACCOUNT_ID` is optional.
 
-Physical Apple Pencil feel and latency require a human on real iPad hardware.
+For the normal app-configured provider path, first choose OpenAI or right.codes
+and a model in the notebook assistant settings, then launch the Debug scenario
+with `TUBER_AGENT_MODE=provider`. That mode reads the same locally stored
+`AgentProviderAccess` used by the Agentic Layer sidebar; it never discovers or
+copies credentials from another application. Missing provider access produces
+a recoverable configuration failure instead of silently selecting a recording.
+
+Do not place a real token in a shared Xcode scheme, source file, fixture, log, or
+artifact. The adapter holds launch configuration in process memory, uses an
+ephemeral URL session, and streams the undocumented ChatGPT Codex response as
+typed Responses SSE events. If live mode is requested without a token, the app
+shows a credential failure instead of silently falling back to the recording.
+The current hero sends a deterministic 580×380 rendering of its selected
+algebra work; genuine user-driven lasso capture is still a separate milestone.
+The adapter forces one strict `place_pins` call per turn, returns the provider's
+response ID as the conversation ID, and sends that ID as
+`previous_response_id` for a follow-up. Provider failures and unexpected wire
+shapes are mapped to redacted recoverable failures; raw provider bodies are not
+shown in the UI or diagnostics.
+Live-provider evidence must be labeled separately and must never substitute for
+the credential-free recorded scenario.
 
 ## Human device loop
 
-For authentic Pencil fixtures or human UI verdicts, use PencilFixtureMCP (Skill: `human-device-loop`). Full tool list and install: `DeveloperTools/PencilFixtureMCP/README.md`.
+PencilFixtureMCP exposes two separate Debug-only protocols. Use feedback threads for conversational UI review. Use the pen-fixture protocol only when authentic Apple Pencil input must become a replayable fixture. Skill: `human-device-loop`; tool details and installation: `DeveloperTools/PencilFixtureMCP/README.md`.
 
-### Agent path
+### Feedback-thread agent path
 
-1. `request_pen_fixture(description)` or `request_human_review(prompt)` pushes a request into the Debug app on the connected device (physical preferred; simulator fallback) and launches it.
-2. The Debug app shows the agent prompt in a top banner (`AgentRequestBanner`).
-3. `await_interaction` / `collect_interaction` pulls indexed JSON from the device.
-4. Record the request id, verdict, optional `humanNotes`, fixture path, and index entry in the evidence packet.
+Feedback threads have three modes. Prefer an **Asynchronous Review Run** when the human can perform independent checks in any order: put all human-autonomous checks in one visible checklist, let drafts persist independently, and wake the task once after `Finish Review`. Use **Guided human review** for agent-gated or sequential actions, with one visible thread for one complete one-at-a-time journey. **Harness conformance** exercises queues, ordering, lifecycle, ownership, and persistence with isolated internal fixtures, preferably automated. Never surface conformance threads as review steps.
 
-### What the human does on device
+1. `create_feedback_thread` creates an owned, target-pinned review session and either activates it or queues it FIFO. Create one thread for a guided journey and reuse it.
+   - Privately separate preconditions, one human action, mechanical assertions, and an optional human-only question.
+   - Show only that action and question. Keep protocol identifiers, cursors, states, queue details, test keys, paths, and expected assertions off the device.
+   - Never combine an exact-answer instruction with a PASS/FAIL request.
+2. The Debug app shows a minimal floating bar. The human uses the full-screen thread view to reply, answer, annotate, block, or resolve.
+3. While the initiating Codex turn is active, use `await_thread_response` as the fast path. Before yielding without a reply, call `arm_codex_feedback_wake`; its detached local bridge polls the device and resumes the exact CLI thread through Codex app-server only when a reply becomes eligible. Arm only at the yield boundary so the standalone app-server cannot race a desktop-owned turn. A one-minute task heartbeat is an emergency fallback only if bridge arming fails.
+4. The resumed turn collects ordered messages and durable attachment paths with `collect_thread_updates`, acknowledges the dispatched `wake_id` only after collection succeeds, then presents the next focused action with `ask_thread_question` when its precondition holds.
+5. Use `post_thread_message` for normal follow-up or bounded revision metadata and `ask_thread_question` for free-text or single-choice questions.
+6. Use `set_feedback_thread_state` for optimistic block, resolve, cancel, or blocked-thread resume transitions; pass the last sequence consumed so newer human feedback cannot be skipped. Resolved and cancelled threads are immutable and cannot be reopened.
+7. Close the watch on terminal/blocked state. Use `get_feedback_thread` for durable state/history and `export_feedback_thread` for a bounded Markdown evidence transcript.
 
-| Request kind | Required | Optional |
-|---|---|---|
-| `pen-fixture` | Draw the requested stroke once | After capture: verdict + free-text note |
-| `review` | Tap a verdict: `looks-good` / `needs-work` / `blocked` | Free-text note (`humanNotes`) |
+For an asynchronous packet, publish the chat-only preflight table, then use
+`create_review_run` with ordered steps and explicit prerequisites. Include only
+human-autonomous judgments or actions; keep agent-gated transitions and
+mechanical assertions out of the packet. The human may pass, fail, block, or
+skip a step and continue with unrelated ready steps. Responses and annotations
+persist without appending messages. `Finish Review` appends one immutable
+ordered summary and creates the single eligible wake. Collect and acknowledge it once,
+call `collect_review_run`, then `export_review_run` for the evidence bundle.
 
-Textual feedback is never required. Verdicts and notes are indexed with the request; strokes are stored as normalized fixture JSON.
+After collection, summarize the interpreted response in the originating Codex task before presenting another action. Pause the human interaction on the exact first failure, ambiguity, human confusion, unmet precondition, or device/host state divergence. If an authorized in-scope product defect caused the failure, block the visible session, fix and mechanically verify it, then resume that same session. Do not change the visible session to hide or reconcile a divergence, and do not infer subjective judgments from protocol state.
 
-### On-device index
+Keep the returned `owner_token`; only its hash is persisted. Bridge registration transfers the raw capability through an anonymous pipe and never writes it into its watch or configuration files. A human reply moves the active feedback thread to `awaiting-model`, retaining the device slot. A genuinely `blocked`, `resolved`, or `cancelled` thread releases the slot and advances the next queued scenario cleanly. Prefer one focused clarification before revising; ask another only when the answer exposes a materially different ambiguity.
+
+Screenshots are human-triggered. The model may request one in a message but cannot invoke capture or send. The human must preview, may annotate with the native PencilKit tool palette, then attach the result to the reply composer. The annotation remains an unsent draft until the human explicitly sends the reply, which may include text and the screenshot as one message. Canceling or removing the draft publishes nothing. History emphasizes the annotated preview while collection retains both clean and annotated PNG paths. Feedback-thread UI is excluded from the captured product viewport.
+
+Text, choice, and optional-comment drafts are owned by the feedback session and keyed by feedback-thread ID. They persist across focus loss, compact/full-screen transitions, and capture/annotation presentation. A draft clears only after its submission succeeds. Switching to another queued thread does not leak the draft into that thread. Resolved and cancelled threads cannot be reopened.
+
+### Pen-fixture agent path
+
+1. `request_pen_fixture(description)` pushes a Pencil capture request into the Debug app on the connected device.
+2. The human draws the requested stroke and may add a verdict/note.
+3. `await_interaction` / `collect_interaction` pulls the indexed fixture JSON.
+4. Record request ID, verdict, optional `humanNotes`, fixture path, and index entry in the evidence packet.
+
+Pen fixtures are a separate protocol and corpus; they are not feedback-thread interaction types.
+
+### On-device data
 
 ```text
 Documents/
+  feedback-threads/
+    queue.json
+    events.jsonl
+    <feedback-thread-id>/
+      thread.json
+      messages/*.json
+      attachments/*.png
   agent-requests/pending/<id>.json
   agent-requests/completed/<id>.json
   pen-fixtures/<name>.json
   pen-fixtures/index.json
 ```
 
-App ownership: `DeveloperSupport` (`PenFixture.swift`, `AgentInteractionSession.swift`, `AgentRequestBanner.swift`). MCP ownership: `DeveloperTools/PencilFixtureMCP`. The human should not set environment variables or copy container files.
+App ownership remains `DeveloperSupport`; MCP ownership remains `DeveloperTools/PencilFixtureMCP`. The human should not set environment variables or copy container files. Feedback-thread mirrors, attachments, event logs, and exports are gitignored and collected by the MCP.
+
+### Resetting stale Debug feedback state
+
+If obsolete questions remain visible after a failed or abandoned review, use the
+confirmation-gated host command below. It clears only this checkout's
+`.feedback-threads` mirror and the app's Debug feedback-thread store, then
+relaunches the installed app normally:
+
+```sh
+DeveloperTools/reset-feedback-state.sh --confirm
+```
+
+The pinned device session and `--confirm` are required. The command validates
+that `com.tubernotes.app` is installed before deleting the host mirror. It does
+not uninstall TuberNotes or delete notebooks, imported documents, ink, Pins,
+Pencil fixtures, or other product data. Run it only between review journeys;
+all unresolved feedback threads, drafts, queue entries, watches, collected
+attachments, and host-side feedback exports are intentionally discarded.
