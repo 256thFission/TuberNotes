@@ -2192,7 +2192,7 @@ progress, verification-code, and recoverable-error information only when useful.
 
 ## Active line — PC-33: scrapbook notebook thumbnails
 
-Status: **in progress**
+Status: **implementation complete — Release-device inspection deferred**
 
 ### Objective
 
@@ -2227,6 +2227,17 @@ colored cover.
 - 2026-07-21 — Started a bounded library-cover treatment. Existing page
   thumbnail rendering will be reused; implementation and delivery evidence are
   pending.
+- 2026-07-21 — Implemented the first-page scrapbook thumbnail in
+  `NotebookCoverCard`: the existing white-backed renderer is drawn once on
+  appearance or first-page change, cropped under a tilted white paper edge,
+  while the colored cover, title, page count, and card interaction remain
+  unchanged. `git diff --check` passed before a concurrent workspace commit
+  incorporated the scoped edit. The named iPad preflight passed for Phillip’s
+  iPad (`2DD98ECC-A26A-5730-943B-01DD63DC4117`), but Xcode was open and the
+  host Release simulator build stalled during full Swift compilation after a
+  separate temporary-build database-lock attempt. No app was installed or
+  launched; normal Release inspection and Phillip’s visual verdict remain
+  deferred.
 
 ## Planned line — PC-24 … PC-29: recorded textbook-citation demo
 
@@ -2246,7 +2257,7 @@ Child work lines:
 | PC-25 | [`PC-25-TextbookCorpusExtraction.md`](PC-25-TextbookCorpusExtraction.md) | Knowledge | no | implementation complete — focused checks pass |
 | PC-26 | [`PC-26-LiveTextbookSearchTool.md`](PC-26-LiveTextbookSearchTool.md) | App / AI boundary | no | citation-first demo polish deployed — awaiting Phillip's verdict |
 | PC-27 | [`PC-27-GroundedCitationChips.md`](PC-27-GroundedCitationChips.md) | App + Notebook chat | **yes** | implementation complete — focused checks pass |
-| PC-28 | [`PC-28-CrossNotebookNavigation.md`](PC-28-CrossNotebookNavigation.md) | App coordination | **yes** | implementation complete — focused checks pass |
+| PC-28 | [`PC-28-CrossNotebookNavigation.md`](PC-28-CrossNotebookNavigation.md) | App coordination | **yes** | citation-arrival pins deployed — awaiting Phillip's verdict |
 | PC-29 | [`PC-29-DemoContentCaptureRig.md`](PC-29-DemoContentCaptureRig.md) | DeveloperSupport | no | content artifacts complete — manual capture deferred |
 
 ### Objective
@@ -2297,6 +2308,37 @@ suite failure.
 
 ### Session log
 
+- 2026-07-21 — Reset the opt-in textbook demo state again by advancing its seed
+  marker to v3. The flagged launch reconstructs the worksheet and imported
+  textbook without clearing OpenAI login state. Exact-device preflight and the
+  signed Release build, install, and normal launch succeeded.
+- 2026-07-21 — At Phillip's request, the current integrated PC-24…PC-29
+  worktree was rebuilt as a signed Release with `TEXTBOOK_CITATION_DEMO`, then
+  installed and launched normally on the pinned iPad. Artifacts are under
+  `tmp/verify/pc28-cross-notebook-navigation/final-flagged-redeploy/`.
+- 2026-07-21 — PC-28's first live contextual-arrival attempt produced no
+  visible action. Device diagnostics contained no second provider loop: the
+  imported destination's existing Agentic Layer initialized inactive and the
+  request was rejected locally before transport. Citation arrival now activates
+  that layer before the forced `place_pins` request. The flagged signed Release
+  rebuilt, installed, and launched normally; Phillip's repeat verdict is
+  pending.
+- 2026-07-21 — `CONTRACT:` The grounded-citation tap now carries the exact
+  originating question and completed response in a separate App-owned
+  `CitationNavigationContext`. Hit-derived document/page provenance remains
+  untouched. After arrival, the forced pin request uses that context to explain
+  how the visible source supports or qualifies the original response and what
+  the term means in the student's specific case. Generic cross-notebook opening
+  and same-notebook `switch_page` are unchanged. The flagged signed Release
+  rebuilt, installed, and launched normally on the pinned iPad.
+- 2026-07-21 — `CONTRACT:` PC-28 now starts a distinct, forced `place_pins`
+  request only after the main cited answer has completed, the user taps its
+  grounded citation, and the cited textbook page is visible. Its instructions
+  require exactly two same-page explanation pins at the relevant definition and
+  supporting context, with no search, page switch, or prose-only substitute.
+  The answer path and same-notebook `switch_page` behavior remain unchanged.
+  Exact-device preflight and the flagged signed Release build, install, and
+  normal launch succeeded; Phillip's placement/navigation verdict is pending.
 - 2026-07-21 — Changed the demo autotype question to “What does racemic mean in
   this case?” Imported-textbook requests now retain an explicit mandatory
   textbook-grounding instruction across both the forced search and answer
