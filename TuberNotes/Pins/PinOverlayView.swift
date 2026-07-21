@@ -475,7 +475,7 @@ private struct PinCard: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(style.color)
-                    .accessibilityLabel("Open Pin Chat")
+                    .accessibilityLabel("Open Notebook Chat")
                 }
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")

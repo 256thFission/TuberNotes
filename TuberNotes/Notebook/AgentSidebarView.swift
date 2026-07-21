@@ -1,10 +1,9 @@
-import AuthenticationServices
 import SafariServices
 import SwiftUI
 import UIKit
 
-/// Frosted question panel for the active Agentic Layer. Each spatial Pin owns
-/// one conversation; message-level branches never create additional Pins.
+/// Frosted question panel for the active Agentic Layer. A lasso selection may
+/// supply visual context, but only an explicit composer submission sends it.
 struct AgentSidebarView: View {
     @ObservedObject var vm: NotebookViewModel
     @Binding var selectedParentThreadID: UUID?
@@ -21,13 +20,17 @@ struct AgentSidebarView: View {
     @ObservedObject private var openAILogin = OpenAICodexLoginSession.shared
     @State private var prompt = ""
     @State private var expandedRootIDs: Set<UUID> = []
+    @State private var isComposerFocused = false
+    @State private var didRunDemoAutotype = false
+    var suppliedSelection: SelectionArtifact? = nil
+    var composerFocusRequestID: UUID? = nil
     var isFullChatTab = false
     var onClose: () -> Void
     var onOpenFullChat: () -> Void = {}
     var onAgentNavigationRequest: ((AgentNavigationRequest) -> Void)? = nil
     var onEditProviderAccess: () -> Void
 
-    private var hasSelection: Bool { vm.lassoRect != nil }
+    private var hasSelection: Bool { suppliedSelection != nil || vm.lassoRect != nil }
     private var provider: AgentProvider {
 #if DEBUG
         AgentProvider(rawValue: providerRaw) ?? .openAI
@@ -101,7 +104,7 @@ struct AgentSidebarView: View {
                 sidebarBody
             }
         }
-        // Pin Chat is always a narrow, non-modal sidebar. Keeping this width
+        // Notebook Chat is always a narrow, non-modal sidebar. Keeping this width
         // independent of transcript mode prevents conversation from becoming
         // a page-blocking surface.
         .frame(width: 340)
@@ -123,6 +126,7 @@ struct AgentSidebarView: View {
         .environment(\.colorScheme, .dark)
         .accessibilityIdentifier("assistant-sidebar")
         .onAppear { validateSelectedParent() }
+        .task { await runDemoAutotypeIfNeeded() }
         .onChange(of: vm.selectedLayerID) { _, _ in validateSelectedParent() }
         .onChange(of: vm.newestAgentThreadID) { _, threadID in
             guard let threadID,
@@ -156,7 +160,7 @@ struct AgentSidebarView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!vm.canAnalyzeCurrentPage)
-                    .accessibilityHint("Opens Pin Chat for the current page")
+                    .accessibilityHint("Opens Notebook Chat for the current page")
 
                     compactAnalysisState
 
@@ -185,6 +189,8 @@ struct AgentSidebarView: View {
                 isSending: vm.isAnalyzing,
                 canSend: vm.canAnalyzeCurrentPage,
                 failureMessage: vm.agentError,
+                focusRequestID: composerFocusRequestID,
+                isFocused: $isComposerFocused,
                 onSend: submitPrompt,
                 onCancel: vm.cancelAnalysis,
                 onRetry: vm.retryLastAnalysis,
@@ -204,9 +210,11 @@ struct AgentSidebarView: View {
                 pageLabel: "Page \(pageNumber)",
                 pinContext: selectedParent.map { previewText($0.teaser, limit: 100) },
                 branchCount: branchCount,
+                isCompact: isComposerFocused,
                 onClose: onClose
             )
-            HStack(spacing: 8) {
+            if !isComposerFocused {
+                HStack(spacing: 8) {
                 Text("Model")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -237,9 +245,10 @@ struct AgentSidebarView: View {
                 .accessibilityValue(selectedModel)
                 .accessibilityIdentifier("sidebar-model-selector")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 7)
-            .background(.white.opacity(0.035))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 7)
+                .background(.white.opacity(0.035))
+            }
         }
     }
 
@@ -253,6 +262,21 @@ struct AgentSidebarView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
+                    if selectedParent == nil, suppliedSelection != nil {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Selected region attached", systemImage: "lasso")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Type your question below. Nothing is sent until you tap Send.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.indigo.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.indigo.opacity(0.35)))
+                        .accessibilityIdentifier("notebook-chat-selection-context")
+                    }
+
                     if let selectedParent {
                         ForEach(PinMessageThreadBuilder.items(for: selectedParent)) { message in
                             PinChatTurnView(
@@ -295,7 +319,7 @@ struct AgentSidebarView: View {
                             Image(systemName: "bubble.left.and.bubble.right")
                                 .font(.title2)
                                 .foregroundStyle(.indigo)
-                            Text("Start a Pin Chat")
+                            Text("Start a Notebook Chat")
                                 .font(.headline)
                             Text("Ask about the current page. The response will stay attached to this page as a Pin.")
                                 .font(.subheadline)
@@ -327,7 +351,7 @@ struct AgentSidebarView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Label(isFullChatTab ? "Pin Chat" : "Agentic Layer", systemImage: isFullChatTab ? "bubble.left.and.bubble.right.fill" : "sparkles")
+                Label(isFullChatTab ? "Notebook Chat" : "Agentic Layer", systemImage: isFullChatTab ? "bubble.left.and.bubble.right.fill" : "sparkles")
                     .font(.headline)
                 if let layer = vm.notebook.agenticLayers.first(where: { $0.id == vm.selectedLayerID }) {
                     Text("\(layer.name) · Active").font(.caption).foregroundStyle(.secondary)
@@ -382,7 +406,7 @@ struct AgentSidebarView: View {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
-                Button("Open Pin Chat to retry") { onOpenFullChat() }
+                Button("Open Notebook Chat to retry") { onOpenFullChat() }
                     .font(.caption.weight(.semibold))
             }
         }
@@ -414,10 +438,36 @@ struct AgentSidebarView: View {
             question: submitted,
             parentThreadID: parent,
             parentMessageID: messageID,
-            createsFork: forkedFromMessageID != nil
+            createsFork: forkedFromMessageID != nil,
+            selection: parent == nil ? suppliedSelection : nil
         )
+        isComposerFocused = false
         forkedFromMessageID = nil
         prompt = ""
+    }
+
+    @MainActor
+    private func runDemoAutotypeIfNeeded() async {
+#if TEXTBOOK_CITATION_DEMO
+        guard isFullChatTab,
+              !didRunDemoAutotype,
+              selectedParent == nil,
+              !vm.isAnalyzing,
+              prompt.isEmpty else { return }
+        didRunDemoAutotype = true
+        let demoQuestion = "Why does an SN1 reaction at a chiral carbon produce racemization rather than retention?"
+        isComposerFocused = true
+        try? await Task.sleep(for: .milliseconds(450))
+        guard !Task.isCancelled else { return }
+        for character in demoQuestion {
+            prompt.append(character)
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
+        }
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled, prompt == demoQuestion else { return }
+        submitPrompt()
+#endif
     }
 
     private func previewText(_ source: String, limit: Int = 240) -> String {
@@ -469,12 +519,6 @@ struct AgentSidebarView: View {
                 proxy.scrollTo(focusedID, anchor: .top)
             }
         }
-    }
-
-    private var analyzeTitle: String {
-        if vm.isAnalyzing { return "Placing Pins…" }
-        if selectedParent != nil { return "Send to full chat" }
-        return hasSelection ? "Place guidance Pins" : "Guide this page"
     }
 
     private var providerConfigurationPrompt: String {
@@ -889,8 +933,8 @@ private enum AgentConversationTreeBuilder {
     }
 }
 
-/// Centered frosted popup for provider access. Rendered over the whole editor
-/// so it sits in the middle of the screen.
+/// Centered provider settings lightbox. Rendered over the whole editor so it
+/// sits in the middle of the screen without borrowing contrast from the page.
 struct AgentProviderAccessPopup: View {
 #if DEBUG
     @AppStorage(AgentProviderAccess.credentialStorageKey) private var credential = ""
@@ -905,7 +949,6 @@ struct AgentProviderAccessPopup: View {
 #endif
     @State private var draftModel = ""
     @State private var embeddedBrowser: OpenAIEmbeddedBrowserItem?
-    @StateObject private var ephemeralAuthentication = OpenAIEphemeralAuthenticationPresenter()
     @State private var shouldPresentFreshSignIn = false
 #if DEBUG
     @State private var draftAccessMethodRaw = AgentAccessMethod.apiKey.rawValue
@@ -956,94 +999,123 @@ struct AgentProviderAccessPopup: View {
                 .ignoresSafeArea()
                 .onTapGesture { onClose() }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Label("Agent provider", systemImage: "key.fill").font(.headline)
-                        Spacer()
-                        Button { onClose() } label: { Image(systemName: "xmark") }
-                            .accessibilityLabel("Close")
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Label("Agent Provider", systemImage: "key.fill")
+                        .font(.headline)
+                    Spacer()
+                    Button { onClose() } label: {
+                        Image(systemName: "xmark")
                     }
+                    .accessibilityLabel("Close")
+                }
+                .padding(.horizontal, 24)
+                .frame(minHeight: 56)
+
+                Divider()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
 
 #if DEBUG
-                    Picker("Provider", selection: $draftProviderRaw) {
-                        ForEach(AgentProvider.allCases) { provider in
-                            Text(provider.label).tag(provider.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("agent-provider-picker")
-                    .onChange(of: draftProviderRaw) { _, _ in
-                        // Never carry one provider's credential across to another endpoint.
-                        draftCredential = ""
-                        draftModel = ""
-                    }
-
-                    if provider == .openAI {
-                        Picker("OpenAI access", selection: $draftAccessMethodRaw) {
-                            Text("ChatGPT sign-in").tag(AgentAccessMethod.chatGPTTemporary.rawValue)
-                            Text("API key").tag(AgentAccessMethod.apiKey.rawValue)
+                        Picker("Provider", selection: $draftProviderRaw) {
+                            ForEach(AgentProvider.allCases) { provider in
+                                Text(provider.label).tag(provider.rawValue)
+                            }
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of: draftAccessMethodRaw) { _, _ in
-                            // Models are route-specific. The saved API key remains intact.
+                        .accessibilityIdentifier("agent-provider-picker")
+                        .onChange(of: draftProviderRaw) { _, _ in
+                            // Never carry one provider's credential across to another endpoint.
+                            draftCredential = ""
                             draftModel = ""
                         }
-                        .accessibilityIdentifier("openai-access-method-picker")
-                    }
+
+                        if provider == .openAI {
+                            Picker("OpenAI access", selection: $draftAccessMethodRaw) {
+                                Text("ChatGPT sign-in").tag(AgentAccessMethod.chatGPTTemporary.rawValue)
+                                Text("API key").tag(AgentAccessMethod.apiKey.rawValue)
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: draftAccessMethodRaw) { _, _ in
+                                // Models are route-specific. The saved API key remains intact.
+                                draftModel = ""
+                            }
+                            .accessibilityIdentifier("openai-access-method-picker")
+                        }
 #endif
 
 #if DEBUG
-                    if provider == .openAI, accessMethod == .chatGPTTemporary {
-                        temporaryOpenAIAccess
-                    } else {
-                        Text(provider == .rightCode
-                             ? "Paste locally supplied right.codes access for notebook analysis and Pin conversations."
-                             : "Paste a locally supplied OpenAI API key for notebook analysis and Pin conversations.")
-                            .font(.footnote).foregroundStyle(.secondary)
+                        if provider == .openAI, accessMethod == .chatGPTTemporary {
+                            temporaryOpenAIAccess
+                        } else {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(provider == .rightCode
+                                     ? "Paste locally supplied right.codes access for notebook analysis and Pin conversations."
+                                     : "Paste a locally supplied OpenAI API key for notebook analysis and Pin conversations.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
 
-                        SecureField(provider == .rightCode ? "right.codes access…" : "sk-…", text: $draftCredential)
-                            .textFieldStyle(.plain)
-                            .padding(12)
-                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.14)))
-                            .accessibilityLabel("\(provider.label) access credential")
-                            .accessibilityHint("Stored locally for notebook analysis and Pin conversations")
-                            .accessibilityIdentifier("agent-provider-credential")
-                    }
+                                SecureField(
+                                    provider == .rightCode ? "right.codes access…" : "sk-…",
+                                    text: $draftCredential
+                                )
+                                .textFieldStyle(.plain)
+                                .padding(12)
+                                .background(
+                                    Color(uiColor: .tertiarySystemGroupedBackground),
+                                    in: RoundedRectangle(cornerRadius: 10)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .strokeBorder(.primary.opacity(0.12))
+                                )
+                                .accessibilityLabel("\(provider.label) access credential")
+                                .accessibilityHint("Stored locally for notebook analysis and Pin conversations")
+                                .accessibilityIdentifier("agent-provider-credential")
+                            }
+                            .padding(16)
+                            .background(
+                                Color(uiColor: .secondarySystemGroupedBackground),
+                                in: RoundedRectangle(cornerRadius: 16)
+                            )
+                        }
 #else
-                    temporaryOpenAIAccess
+                        temporaryOpenAIAccess
 #endif
 
-                    HStack {
-                        Text("Model").font(.subheadline)
-                        Spacer()
-                        Menu {
-                            Button("Default (\(routeDefaultModel))") { draftModel = "" }
-                            Divider()
-                            ForEach(routeModels, id: \.self) { knownModel in
-                                Button(knownModel) { draftModel = knownModel }
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Model")
+                                .font(.title3.weight(.semibold))
+
+                            Menu {
+                                Button("Default (\(routeDefaultModel))") { draftModel = "" }
+                                Divider()
+                                ForEach(routeModels, id: \.self) { knownModel in
+                                    Button(knownModel) { draftModel = knownModel }
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Text(modelLabel)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 14)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(
+                                    Color(uiColor: .secondarySystemGroupedBackground),
+                                    in: RoundedRectangle(cornerRadius: 12)
+                                )
                             }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(modelLabel).lineLimit(1)
-                                Image(systemName: "chevron.up.chevron.down").font(.caption2)
-                            }
-                            .frame(maxWidth: 240, alignment: .trailing)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.14)))
+                            .accessibilityLabel("Model")
+                            .accessibilityValue(modelLabel)
+                            .accessibilityIdentifier("agent-model-picker")
                         }
-                        .accessibilityLabel("Model")
-                        .accessibilityValue(modelLabel)
-                        .accessibilityIdentifier("agent-model-picker")
-                    }
 
-                    Text("This temporary OpenAI sign-in analyzes a lasso and places guidance Pins on the original page.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-
-                    HStack {
 #if DEBUG
                         if (provider == .rightCode || accessMethod == .apiKey), !credential.isEmpty {
                             Button("Remove access", role: .destructive) {
@@ -1051,48 +1123,38 @@ struct AgentProviderAccessPopup: View {
                             }
                             .accessibilityIdentifier("agent-provider-remove")
                         }
-                        Spacer()
-                        Button("Cancel") { onClose() }
-                            .keyboardShortcut(.cancelAction)
-                        Button("Save") {
-                            storedProviderRaw = draftProviderRaw
-                            storedModel = draftModel
-                            if provider == .rightCode || accessMethod == .apiKey {
-                                credential = trimmedDraftCredential
-                            }
-                            if provider == .openAI {
-                                storedAccessMethodRaw = draftAccessMethodRaw
-                            }
-                            onClose()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(
-                            (provider == .rightCode || accessMethod == .apiKey)
-                            && trimmedDraftCredential.isEmpty
-                        )
-                        .accessibilityIdentifier("agent-provider-save")
-#else
-                        Spacer()
-                        Button("Cancel") { onClose() }
-                            .keyboardShortcut(.cancelAction)
-                        Button("Save") {
-                            storedProviderRaw = AgentProvider.openAI.rawValue
-                            storedAccessMethodRaw = AgentAccessMethod.chatGPTTemporary.rawValue
-                            storedModel = draftModel
-                            onClose()
-                        }
-                            .buttonStyle(.borderedProminent)
 #endif
                     }
+                    .frame(maxWidth: 520, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 22)
                 }
-                .padding(22)
+                .background(Color(uiColor: .systemGroupedBackground))
+
+                Divider()
+
+                HStack(spacing: 12) {
+                    Spacer()
+                    Button("Cancel") { onClose() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") { saveAndClose() }
+                        .buttonStyle(.borderedProminent)
+                        .fontWeight(.semibold)
+                        .disabled(isSaveDisabled)
+                        .accessibilityIdentifier("agent-provider-save")
+                }
+                .padding(.horizontal, 24)
+                .frame(minHeight: 64)
             }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(maxWidth: 440, maxHeight: 620)
-            .frostedGlass(cornerRadius: 26)
+            .frame(maxWidth: 560, maxHeight: 620)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.12))
+            }
+            .shadow(color: .black.opacity(0.28), radius: 28, y: 14)
             .padding(40)
-            .environment(\.colorScheme, .dark)
         }
         .onAppear {
 #if DEBUG
@@ -1113,7 +1175,6 @@ struct AgentProviderAccessPopup: View {
             case .exchanging, .refreshing, .signedIn, .failed, .signedOut:
                 shouldPresentFreshSignIn = false
                 embeddedBrowser = nil
-                ephemeralAuthentication.cancel()
             case let .awaitingUser(code, verificationURL),
                  let .polling(code, verificationURL):
                 if shouldPresentFreshSignIn {
@@ -1124,92 +1185,96 @@ struct AgentProviderAccessPopup: View {
             }
         }
         .sheet(item: $embeddedBrowser) { item in
-            OpenAIEmbeddedSignInSheet(item: item) {
+            EmbeddedSafariView(url: item.verificationURL) {
                 embeddedBrowser = nil
             }
+            .ignoresSafeArea()
         }
         .onDisappear {
             shouldPresentFreshSignIn = false
-            ephemeralAuthentication.cancel()
         }
         .accessibilityIdentifier("agent-provider-popup")
     }
 
     @ViewBuilder
     private var temporaryOpenAIAccess: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Temporary OpenAI sign-in")
-                .font(.subheadline.weight(.semibold))
-            Text("Authorize once to use ChatGPT-backed OpenAI access. TuberNotes keeps reusable session access in this iPad's Keychain and refreshes short-lived access automatically; sign-in returns only if OpenAI rejects the refresh. Saved API keys are never used for this access method.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 14) {
+            Text("OpenAI")
+                .font(.title3.weight(.semibold))
 
-            switch openAILogin.phase {
-            case .signedOut:
-                Button("Sign in with OpenAI") {
-                    startFreshSignIn()
-                }
-                .buttonStyle(.borderedProminent)
-
-            case .requestingCode:
-                loginProgress("Preparing sign-in…")
-                Button("Cancel sign-in") {
-                    openAILogin.cancel()
-                }
-
-            case let .awaitingUser(code, verificationURL):
-                deviceAuthorization(code: code, verificationURL: verificationURL, isChecking: false)
-
-            case let .polling(code, verificationURL):
-                deviceAuthorization(code: code, verificationURL: verificationURL, isChecking: true)
-
-            case .exchanging:
-                loginProgress("Finishing sign-in…")
-                Button("Cancel sign-in") {
-                    openAILogin.cancel()
-                }
-
-            case .refreshing:
-                loginProgress("Refreshing OpenAI session…")
-
-            case .signedIn:
-                Label("Signed in", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.green)
-                Text("Sign out clears TuberNotes' in-memory access and its saved Keychain refresh credential. It does not revoke the browser-authorized grant.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("Sign out", role: .destructive) {
-                    openAILogin.signOut()
-                }
-
-            case let .failed(message):
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                if openAILogin.canResumeCachedSession {
-                    Button("Retry saved session") {
-                        Task { await openAILogin.resumeCachedSession() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    Button("Sign in again") {
-                        startFreshSignIn()
-                    }
-                } else {
-                    Button("Sign in again") {
+            VStack(alignment: .leading, spacing: 14) {
+                switch openAILogin.phase {
+                case .signedOut:
+                    loginStatus("Not signed in", systemImage: "person.crop.circle.badge.xmark")
+                    Button("Sign in") {
                         startFreshSignIn()
                     }
                     .buttonStyle(.borderedProminent)
+
+                case .requestingCode:
+                    loginProgress("Preparing sign-in…")
+
+                case let .awaitingUser(code, verificationURL):
+                    deviceAuthorization(
+                        code: code,
+                        verificationURL: verificationURL,
+                        isChecking: false
+                    )
+
+                case let .polling(code, verificationURL):
+                    deviceAuthorization(
+                        code: code,
+                        verificationURL: verificationURL,
+                        isChecking: true
+                    )
+
+                case .exchanging:
+                    loginProgress("Finishing sign-in…")
+
+                case .refreshing:
+                    loginProgress("Checking sign-in…")
+
+                case .signedIn:
+                    loginStatus("Signed in", systemImage: "checkmark.circle.fill", color: .green)
+                    Button("Sign out", role: .destructive) {
+                        openAILogin.signOut()
+                    }
+                    .buttonStyle(.bordered)
+
+                case let .failed(message):
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                    if openAILogin.canResumeCachedSession {
+                        Button("Check sign-in") {
+                            Task { await openAILogin.resumeCachedSession() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    } else {
+                        Button("Sign in") {
+                            startFreshSignIn()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
             }
-
-            Text("Temporary convenience only; this is not the production TuberNotes gateway or a promise of third-party OpenAI support.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
         }
-        .padding(12)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.12)))
+    }
+
+    private func loginStatus(
+        _ title: String,
+        systemImage: String,
+        color: Color = .secondary
+    ) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(color)
     }
 
     private func loginProgress(_ title: String) -> some View {
@@ -1225,7 +1290,7 @@ struct AgentProviderAccessPopup: View {
         isChecking: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Enter this one-time code on OpenAI's sign-in page:")
+            Text("Use this code in the browser:")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(code)
@@ -1234,45 +1299,45 @@ struct AgentProviderAccessPopup: View {
                 .accessibilityLabel("OpenAI device code")
                 .accessibilityValue(code)
 
-            Button {
-                presentFreshSignIn(code: code, verificationURL: verificationURL)
-            } label: {
-                Label("Sign in with a fresh account", systemImage: "person.2")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(ephemeralAuthentication.isPresenting)
-
-            Text("Fresh sign-in copies this code and opens a private system session without existing browser cookies. Reopening it keeps this device-code request active.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Button {
-                    UIPasteboard.general.string = code
-                } label: {
-                    Label("Copy code", systemImage: "doc.on.doc")
+            HStack(spacing: 10) {
+                Button("Sign in") {
+                    presentFreshSignIn(code: code, verificationURL: verificationURL)
                 }
+                .buttonStyle(.borderedProminent)
 
-                Button {
-                    embeddedBrowser = OpenAIEmbeddedBrowserItem(
-                        code: code,
-                        verificationURL: verificationURL
-                    )
-                } label: {
-                    Label("Use existing browser session", systemImage: "safari")
-                }
-            }
-
-            HStack {
-                Button(isChecking ? "Checking…" : "Check status") {
+                Button("Check sign-in") {
                     openAILogin.checkStatus()
                 }
+                .buttonStyle(.bordered)
                 .disabled(isChecking)
-                Button("Cancel sign-in") {
-                    openAILogin.cancel()
-                }
             }
         }
+    }
+
+    private var isSaveDisabled: Bool {
+#if DEBUG
+        (provider == .rightCode || accessMethod == .apiKey)
+            && trimmedDraftCredential.isEmpty
+#else
+        false
+#endif
+    }
+
+    private func saveAndClose() {
+#if DEBUG
+        storedProviderRaw = draftProviderRaw
+        if provider == .rightCode || accessMethod == .apiKey {
+            credential = trimmedDraftCredential
+        }
+        if provider == .openAI {
+            storedAccessMethodRaw = draftAccessMethodRaw
+        }
+#else
+        storedProviderRaw = AgentProvider.openAI.rawValue
+        storedAccessMethodRaw = AgentAccessMethod.chatGPTTemporary.rawValue
+#endif
+        storedModel = draftModel
+        onClose()
     }
 
     private func startFreshSignIn() {
@@ -1283,57 +1348,10 @@ struct AgentProviderAccessPopup: View {
     private func presentFreshSignIn(code: String, verificationURL: URL) {
         shouldPresentFreshSignIn = false
         UIPasteboard.general.string = code
-        ephemeralAuthentication.start(url: verificationURL)
-    }
-}
-
-@MainActor
-private final class OpenAIEphemeralAuthenticationPresenter: NSObject, ObservableObject,
-    ASWebAuthenticationPresentationContextProviding {
-    @Published private(set) var isPresenting = false
-
-    private var session: ASWebAuthenticationSession?
-    private var sessionID: UUID?
-
-    func start(url: URL) {
-        cancel()
-
-        let id = UUID()
-        sessionID = id
-        let session = ASWebAuthenticationSession(
-            url: url,
-            callbackURLScheme: nil
-        ) { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                guard let self, self.sessionID == id else { return }
-                self.session = nil
-                self.sessionID = nil
-                self.isPresenting = false
-            }
-        }
-        session.prefersEphemeralWebBrowserSession = true
-        session.presentationContextProvider = self
-        self.session = session
-        isPresenting = session.start()
-        if !isPresenting {
-            self.session = nil
-            sessionID = nil
-        }
-    }
-
-    func cancel() {
-        let activeSession = session
-        session = nil
-        sessionID = nil
-        isPresenting = false
-        activeSession?.cancel()
-    }
-
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-        return windows.first(where: \.isKeyWindow) ?? windows.first ?? ASPresentationAnchor()
+        embeddedBrowser = OpenAIEmbeddedBrowserItem(
+            code: code,
+            verificationURL: verificationURL
+        )
     }
 }
 
@@ -1341,44 +1359,6 @@ private struct OpenAIEmbeddedBrowserItem: Identifiable {
     let id = UUID()
     let code: String
     let verificationURL: URL
-}
-
-private struct OpenAIEmbeddedSignInSheet: View {
-    let item: OpenAIEmbeddedBrowserItem
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("OpenAI sign-in")
-                            .font(.headline)
-                        Text("Enter this one-time code when prompted:")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Close", action: onClose)
-                        .accessibilityHint("Closes the browser without cancelling sign-in")
-                }
-
-                Text(item.code)
-                    .font(.title2.monospaced().weight(.bold))
-                    .textSelection(.enabled)
-                    .accessibilityLabel("OpenAI device code")
-                    .accessibilityValue(item.code)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-
-            Divider()
-
-            EmbeddedSafariView(url: item.verificationURL, onClose: onClose)
-                .ignoresSafeArea(edges: .bottom)
-        }
-        .accessibilityIdentifier("openai-embedded-sign-in")
-    }
 }
 
 private struct EmbeddedSafariView: UIViewControllerRepresentable {

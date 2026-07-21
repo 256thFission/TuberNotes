@@ -60,6 +60,21 @@ private func searchCall(_ callID: String, arguments: String) -> [String: Any] {
     ]
 }
 
+private func streamedPayloadWithEmptyTerminalOutput(item: [String: Any]) throws -> Data {
+    let events: [[String: Any]] = [
+        ["type": "response.output_item.done", "output_index": 0, "item": item],
+        [
+            "type": "response.completed",
+            "response": ["id": "response-streamed", "status": "completed", "output": []]
+        ]
+    ]
+    let records = try events.map { event -> String in
+        let data = try JSONSerialization.data(withJSONObject: event)
+        return "data: \(String(decoding: data, as: UTF8.self))\n\n"
+    }
+    return Data(records.joined().utf8)
+}
+
 private let initialBody: [String: Any] = [
     "model": "scripted",
     "stream": true,
@@ -114,6 +129,32 @@ private func testTypedSearchToFinalAnswer() async throws {
         followUpTools.compactMap { $0["name"] as? String } == ["search_textbook"],
         "teaching follow-up must remain search-only"
     )
+}
+
+private func testStreamedItemWinsOverEmptyTerminalOutput() async throws {
+    let searcher = ScriptedSearcher([[hit]])
+    let responses = [
+        try streamedPayloadWithEmptyTerminalOutput(
+            item: searchCall("streamed-call", arguments: #"{"query":"inverse operation","limit":1}"#)
+        ),
+        try payload(output: [], text: "Grounded final answer.")
+    ]
+    var responseIndex = 0
+    let result = try await OpenAICodexVisionClient.runNotebookResponseLoop(
+        initialBody: initialBody,
+        model: "scripted",
+        toolMode: .searchOnly,
+        knowledgeSearcher: searcher,
+        onToolInvocation: { _ in }
+    ) { _ in
+        defer { responseIndex += 1 }
+        return responses[responseIndex]
+    }
+    let searchCount = await searcher.callCount()
+    try check(responseIndex == 2, "streamed function call should advance to its linked follow-up")
+    try check(searchCount == 1, "streamed function call should execute one local search")
+    try check(result.body == "Grounded final answer.", "streamed call should preserve final text")
+    try check(result.knowledgeHits == [hit], "streamed call should preserve the exact typed hit")
 }
 
 private func testZeroHitsTerminates() async throws {
@@ -230,6 +271,7 @@ private enum PC26LiveSearchChecks {
     static func main() async {
         do {
             try await testTypedSearchToFinalAnswer()
+            try await testStreamedItemWinsOverEmptyTerminalOutput()
             try await testZeroHitsTerminates()
             try await testMalformedAndBounds()
             try await testNoInvocationWithoutSearch()

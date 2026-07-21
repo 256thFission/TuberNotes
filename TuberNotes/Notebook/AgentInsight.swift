@@ -257,6 +257,7 @@ struct OpenAICodexVisionClient: AgentInsightClient {
     let route: AgentResponseRoute
     let transport: any OpenAICodexResponsesSending
     let knowledgeSearcher: any KnowledgeSearching
+    let requiresTextbookSearch: Bool
     let onToolInvocation: @Sendable (ToolInvocationSummary?) -> Void
     var generation: UUID? { route.generation }
 
@@ -264,11 +265,13 @@ struct OpenAICodexVisionClient: AgentInsightClient {
         route: AgentResponseRoute,
         transport: any OpenAICodexResponsesSending = OpenAICodexResponsesTransport(),
         knowledgeSearcher: any KnowledgeSearching = OfflineTextbookKnowledgeSearcher(),
+        requiresTextbookSearch: Bool = false,
         onToolInvocation: @escaping @Sendable (ToolInvocationSummary?) -> Void = { _ in }
     ) {
         self.route = route
         self.transport = transport
         self.knowledgeSearcher = knowledgeSearcher
+        self.requiresTextbookSearch = requiresTextbookSearch
         self.onToolInvocation = onToolInvocation
     }
 
@@ -325,6 +328,7 @@ struct OpenAICodexVisionClient: AgentInsightClient {
             "model": route.model,
             "stream": true,
             "store": false,
+            "parallel_tool_calls": false,
             "input": [[
                 "role": "user",
                 "content": content
@@ -332,7 +336,9 @@ struct OpenAICodexVisionClient: AgentInsightClient {
         ]
         if toolMode != .none {
             body["tools"] = Self.notebookTools(for: toolMode)
-            body["tool_choice"] = "auto"
+            body["tool_choice"] = requiresTextbookSearch
+                ? ["type": "function", "name": "search_textbook"]
+                : "auto"
         }
 
         do {
@@ -381,19 +387,67 @@ struct OpenAICodexVisionClient: AgentInsightClient {
         var requestBody = initialBody
         var conversationInput = initialBody["input"] as? [[String: Any]] ?? []
         var previousSearchWasEmpty = false
+        await AgentRuntimeDiagnostics.shared.record("loop_started", fields: [
+            "tool_mode": diagnosticToolMode(toolMode),
+            "maximum_responses": String(maximumProviderResponses),
+            "maximum_searches": String(maximumTextbookSearches)
+        ])
 
         while responseCount < maximumProviderResponses {
             responseCount += 1
-            let data = try await send(requestBody)
-            let response = try responseEnvelope(from: data)
-            let searchCalls = try searchCalls(from: response.output)
+            await AgentRuntimeDiagnostics.shared.record("provider_request_started", fields: [
+                "turn": String(responseCount),
+                "input_items": String((requestBody["input"] as? [[String: Any]])?.count ?? 0)
+            ])
+            let data: Data
+            do {
+                data = try await send(requestBody)
+            } catch {
+                await AgentRuntimeDiagnostics.shared.record("provider_request_failed", fields: [
+                    "turn": String(responseCount),
+                    "gate": "transport"
+                ])
+                throw error
+            }
+            var responseShape = diagnosticResponseShape(from: data)
+            responseShape["turn"] = String(responseCount)
+            responseShape["byte_count"] = String(data.count)
+            await AgentRuntimeDiagnostics.shared.record("provider_response_received", fields: responseShape)
 
-            if !searchCalls.isEmpty {
+            let response: ResponseEnvelope
+            do {
+                response = try responseEnvelope(from: data)
+            } catch {
+                await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+                    "turn": String(responseCount),
+                    "gate": "response_envelope"
+                ])
+                throw error
+            }
+            let parsedSearchCalls: [SearchCall]
+            do {
+                parsedSearchCalls = try searchCalls(from: response.output)
+            } catch {
+                await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+                    "turn": String(responseCount),
+                    "gate": "search_call_schema"
+                ])
+                throw error
+            }
+
+            if !parsedSearchCalls.isEmpty {
                 guard toolMode != .none,
-                      searchCalls.count == 1,
+                      parsedSearchCalls.count == 1,
                       response.functionCallCount == 1,
                       searchCount < maximumTextbookSearches,
                       responseCount < maximumProviderResponses else {
+                    await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+                        "turn": String(responseCount),
+                        "gate": "search_call_bounds",
+                        "search_calls": String(parsedSearchCalls.count),
+                        "function_calls": String(response.functionCallCount),
+                        "completed_searches": String(searchCount)
+                    ])
                     throw AgentError.parse
                 }
                 if previousSearchWasEmpty {
@@ -404,7 +458,7 @@ struct OpenAICodexVisionClient: AgentInsightClient {
                     )
                 }
 
-                let call = searchCalls[0]
+                let call = parsedSearchCalls[0]
                 let invocation = ToolInvocationSummary(
                     id: UUID(),
                     tool: .searchTextbook,
@@ -414,6 +468,11 @@ struct OpenAICodexVisionClient: AgentInsightClient {
                 let hits = try await knowledgeSearcher.searchTextbook(
                     KnowledgeQuery(documentID: nil, text: call.query, limit: call.limit)
                 )
+                await AgentRuntimeDiagnostics.shared.record("textbook_search_completed", fields: [
+                    "turn": String(responseCount),
+                    "hit_count": String(hits.count),
+                    "limit": String(call.limit)
+                ])
                 searchCount += 1
                 invocations.append(invocation)
                 returnedHits.append(contentsOf: hits)
@@ -424,11 +483,34 @@ struct OpenAICodexVisionClient: AgentInsightClient {
                 continue
             }
 
-            let text = try ResponsesTextExtractor.text(from: data) ?? ""
+            let text: String
+            do {
+                text = try ResponsesTextExtractor.text(from: data) ?? ""
+            } catch {
+                await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+                    "turn": String(responseCount),
+                    "gate": "text_extraction"
+                ])
+                throw error
+            }
             if toolMode != .all, response.functionCallCount > 0 {
+                await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+                    "turn": String(responseCount),
+                    "gate": "disallowed_nonsearch_function_call",
+                    "function_calls": String(response.functionCallCount)
+                ])
                 throw AgentError.parse
             }
-            let calls = toolMode == .all ? try toolCalls(from: response.output) : []
+            let calls: [AgentToolCall]
+            do {
+                calls = toolMode == .all ? try toolCalls(from: response.output) : []
+            } catch {
+                await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+                    "turn": String(responseCount),
+                    "gate": "page_tool_schema"
+                ])
+                throw error
+            }
             guard !text.isEmpty || !calls.isEmpty else {
                 if previousSearchWasEmpty {
                     return AgentInsight(
@@ -437,8 +519,18 @@ struct OpenAICodexVisionClient: AgentInsightClient {
                         toolInvocations: invocations
                     )
                 }
+                await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+                    "turn": String(responseCount),
+                    "gate": "empty_final_content"
+                ])
                 throw AgentError.parse
             }
+            await AgentRuntimeDiagnostics.shared.record("loop_completed", fields: [
+                "turn": String(responseCount),
+                "text_present": text.isEmpty ? "false" : "true",
+                "page_tool_calls": String(calls.count),
+                "returned_hits": String(returnedHits.count)
+            ])
             return AgentInsight(
                 body: text,
                 toolCalls: calls,
@@ -446,6 +538,10 @@ struct OpenAICodexVisionClient: AgentInsightClient {
                 toolInvocations: invocations
             )
         }
+        await AgentRuntimeDiagnostics.shared.record("response_rejected", fields: [
+            "turn": String(responseCount),
+            "gate": "response_loop_exhausted"
+        ])
         throw AgentError.parse
     }
 
@@ -540,13 +636,93 @@ struct OpenAICodexVisionClient: AgentInsightClient {
     private static let noTextbookSourceMessage =
         "I couldn't find relevant evidence in the available textbook, so I can't ground a textbook-based answer."
 
+    private static func diagnosticToolMode(_ mode: NotebookToolMode) -> String {
+        switch mode {
+        case .none: "none"
+        case .searchOnly: "search_only"
+        case .all: "all"
+        }
+    }
+
+    private static func diagnosticResponseShape(from data: Data) -> [String: String] {
+        let payloads = (try? ResponsesSSEDecoder.payloads(from: data)) ?? []
+        let recognizedEvents: Set<String> = [
+            "response.created", "response.in_progress", "response.completed", "response.incomplete",
+            "response.failed", "response.output_item.added", "response.output_item.done",
+            "response.content_part.added", "response.content_part.done",
+            "response.output_text.delta", "response.output_text.done",
+            "response.function_call_arguments.delta", "response.function_call_arguments.done",
+            "error"
+        ]
+        let eventTypes = Set(payloads.compactMap { payload -> String? in
+            guard let type = payload["type"] as? String else { return nil }
+            return recognizedEvents.contains(type) ? type : "other"
+        }).sorted()
+        let terminalResponse = payloads.reversed().compactMap { payload -> [String: Any]? in
+            guard ["response.completed", "response.incomplete", "response.failed"]
+                .contains(payload["type"] as? String ?? "") else { return nil }
+            return payload["response"] as? [String: Any]
+        }.first
+        let directResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let response = terminalResponse ?? directResponse ?? [:]
+        let completedItems = payloads.compactMap { payload -> [String: Any]? in
+            guard payload["type"] as? String == "response.output_item.done" else { return nil }
+            return payload["item"] as? [String: Any]
+        }
+        let terminalOutput = response["output"] as? [[String: Any]]
+        let output: [[String: Any]]
+        if let terminalOutput, !terminalOutput.isEmpty {
+            output = terminalOutput
+        } else if !completedItems.isEmpty {
+            output = completedItems
+        } else {
+            output = terminalOutput ?? []
+        }
+        let recognizedItemTypes: Set<String> = ["message", "reasoning", "function_call"]
+        let itemTypes = Set(output.compactMap { item -> String? in
+            guard let type = item["type"] as? String else { return nil }
+            return recognizedItemTypes.contains(type) ? type : "other"
+        }).sorted()
+        let recognizedTools: Set<String> = ["search_textbook", "place_pins", "switch_page"]
+        let toolNames = Set(output.compactMap { item -> String? in
+            guard item["type"] as? String == "function_call",
+                  let name = item["name"] as? String else { return nil }
+            return recognizedTools.contains(name) ? name : "other"
+        }).sorted()
+        let recognizedStatuses: Set<String> = ["queued", "in_progress", "completed", "incomplete", "failed"]
+        let rawStatus = response["status"] as? String
+        let status = rawStatus.map { recognizedStatuses.contains($0) ? $0 : "other" } ?? "missing"
+        return [
+            "sse_parse": payloads.isEmpty ? "empty_or_json" : "parsed",
+            "event_types": eventTypes.joined(separator: ","),
+            "terminal_status": status,
+            "output_item_types": itemTypes.joined(separator: ","),
+            "tool_names": toolNames.joined(separator: ","),
+            "output_item_count": String(output.count),
+            "terminal_output_item_count": String(terminalOutput?.count ?? 0),
+            "streamed_completed_item_count": String(completedItems.count)
+        ]
+    }
+
     private static func responseEnvelope(from data: Data) throws -> ResponseEnvelope {
         let payloads = (try? ResponsesSSEDecoder.payloads(from: data)) ?? []
         let response = payloads.reversed().compactMap { payload -> [String: Any]? in
             guard payload["type"] as? String == "response.completed" else { return nil }
             return payload["response"] as? [String: Any]
         }.first ?? (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
-        guard let output = response["output"] as? [[String: Any]] else {
+        let completedItems = payloads.compactMap { payload -> [String: Any]? in
+            guard payload["type"] as? String == "response.output_item.done" else { return nil }
+            return payload["item"] as? [String: Any]
+        }
+        let terminalOutput = response["output"] as? [[String: Any]]
+        let output: [[String: Any]]
+        if let terminalOutput, !terminalOutput.isEmpty {
+            output = terminalOutput
+        } else if !completedItems.isEmpty {
+            output = completedItems
+        } else if let terminalOutput {
+            output = terminalOutput
+        } else {
             throw AgentError.parse
         }
         return ResponseEnvelope(
@@ -599,6 +775,7 @@ struct OpenAICodexVisionClient: AgentInsightClient {
             "model": routeModel,
             "stream": true,
             "store": false,
+            "parallel_tool_calls": false,
             // `store` remains false, so continuation is explicit: the validated
             // prior output items and their linked function result are replayed.
             "input": input,
@@ -649,6 +826,7 @@ enum AgentInsightClientFactory {
     @MainActor static func make(
         runtimeAccess: AgentRuntimeAccess? = nil,
         knowledgeSearcher: any KnowledgeSearching = OfflineTextbookKnowledgeSearcher(),
+        requiresTextbookSearch: Bool = false,
         onToolInvocation: @escaping @Sendable (ToolInvocationSummary?) -> Void = { _ in }
     ) -> any AgentInsightClient {
         if runtimeAccess == nil {
@@ -662,6 +840,7 @@ enum AgentInsightClientFactory {
             return OpenAICodexVisionClient(
                 route: route,
                 knowledgeSearcher: knowledgeSearcher,
+                requiresTextbookSearch: requiresTextbookSearch,
                 onToolInvocation: onToolInvocation
             )
         }
@@ -686,6 +865,7 @@ enum AgentInsightClientFactory {
             return OpenAICodexVisionClient(
                 route: route,
                 knowledgeSearcher: knowledgeSearcher,
+                requiresTextbookSearch: requiresTextbookSearch,
                 onToolInvocation: onToolInvocation
             )
         }

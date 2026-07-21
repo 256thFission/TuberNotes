@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Presentation-only building blocks for the normal Pin Chat experience.
+/// Presentation-only building blocks for the normal Notebook Chat experience.
 /// These views deliberately know nothing about persistence, provider routing,
 /// spatial coordinates, or conversation-tree construction.
 
@@ -9,6 +9,7 @@ struct PinChatContextHeader: View {
     let pageLabel: String?
     let pinContext: String?
     let branchCount: Int
+    var isCompact = false
     let onClose: () -> Void
 
     var body: some View {
@@ -21,11 +22,12 @@ struct PinChatContextHeader: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to notebook")
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Pin Chat")
+            VStack(alignment: .leading, spacing: isCompact ? 0 : 3) {
+                Text("Notebook Chat")
                     .font(.headline)
 
-                HStack(spacing: 6) {
+                if !isCompact {
+                    HStack(spacing: 6) {
                     Text(layerName)
                     if let pageLabel {
                         Text("·")
@@ -35,24 +37,25 @@ struct PinChatContextHeader: View {
                         Text("·")
                         Text("\(branchCount) \(branchCount == 1 ? "fork" : "forks")")
                     }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .accessibilityElement(children: .combine)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityElement(children: .combine)
 
-                if let pinContext, !pinContext.isEmpty {
-                    Text(pinContext)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .accessibilityLabel("Pin context: \(pinContext)")
+                    if let pinContext, !pinContext.isEmpty {
+                        Text(pinContext)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .accessibilityLabel("Pin context: \(pinContext)")
+                    }
                 }
             }
 
             Spacer(minLength: 8)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, isCompact ? 4 : 10)
         .background(.ultraThinMaterial)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pin-chat-header")
@@ -90,9 +93,6 @@ struct PinChatTurnView: View {
                     .frame(width: 24, height: 24)
                     .background(.white.opacity(0.08), in: Circle())
                 VStack(alignment: .leading, spacing: 9) {
-                    MarkdownMessageView(source: assistantMarkdown)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
                     if let groundedCitation {
                         GroundedCitationChip(
                             citation: groundedCitation,
@@ -101,6 +101,9 @@ struct PinChatTurnView: View {
                             }
                         )
                     }
+
+                    MarkdownMessageView(source: assistantMarkdown)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -121,21 +124,18 @@ private struct GroundedCitationChip: View {
         Button(action: { onOpen?() }) {
             HStack(spacing: 6) {
                 Image(systemName: "book.closed.fill")
-                Text(citation.documentTitle)
+                Text("Open textbook · Page \(citation.pageNumber)")
                     .lineLimit(1)
-                Text("· p. \(citation.pageNumber)")
-                if let sectionTitle = citation.sectionTitle,
-                   !sectionTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("· \(sectionTitle)")
-                        .lineLimit(1)
-                }
+                Spacer(minLength: 4)
+                Image(systemName: "arrow.up.right")
             }
             .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(.white.opacity(0.07), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.indigo, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.18)))
         }
         .buttonStyle(.plain)
         .disabled(onOpen == nil)
@@ -271,33 +271,33 @@ struct PinChatComposer: View {
     let isSending: Bool
     let canSend: Bool
     let failureMessage: String?
+    let focusRequestID: UUID?
+    @Binding var isFocused: Bool
     let onSend: () -> Void
     let onCancel: () -> Void
     let onRetry: () -> Void
     let onCancelFork: () -> Void
 
-    @FocusState private var isComposerFocused: Bool
+    @FocusState private var composerFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let continuationLabel, !continuationLabel.isEmpty {
+            if isForking, let continuationLabel, !continuationLabel.isEmpty {
                 HStack(spacing: 8) {
                     Label(
-                        "\(isForking ? "Forking" : "Continuing") from \(continuationLabel)",
-                        systemImage: isForking ? "arrow.triangle.branch" : "arrowshape.turn.up.left.fill"
+                        "Forking from \(continuationLabel)",
+                        systemImage: "arrow.triangle.branch"
                     )
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    if isForking {
-                        Spacer(minLength: 4)
-                        Button(action: onCancelFork) {
-                            Image(systemName: "xmark.circle.fill")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Cancel fork")
+                    Spacer(minLength: 4)
+                    Button(action: onCancelFork) {
+                        Image(systemName: "xmark.circle.fill")
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Cancel fork")
                 }
             }
 
@@ -321,7 +321,7 @@ struct PinChatComposer: View {
                     axis: .vertical
                 )
                     .lineLimit(1...6)
-                    .focused($isComposerFocused)
+                    .focused($composerFieldFocused)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -370,6 +370,20 @@ struct PinChatComposer: View {
         .background(.ultraThinMaterial)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pin-chat-composer")
+        .onAppear {
+            if focusRequestID != nil { composerFieldFocused = true }
+        }
+        .onChange(of: focusRequestID) { _, requestID in
+            if requestID != nil { composerFieldFocused = true }
+        }
+        .onChange(of: composerFieldFocused) { _, focused in
+            isFocused = focused
+        }
+        .onChange(of: isFocused) { _, focused in
+            if composerFieldFocused != focused {
+                composerFieldFocused = focused
+            }
+        }
     }
 
     private var sendIsEnabled: Bool {

@@ -89,6 +89,29 @@ final class NotebookViewModel: ObservableObject {
         self.currentDrawingLayerID = notebook.pages[0].drawingLayers[0].id
     }
 
+#if TEXTBOOK_CITATION_DEMO
+    func resetTextbookCitationDemo() {
+        analysisTask?.cancel()
+        activeAnalysisRequestID = nil
+        do {
+            let worksheet = try store.resetTextbookCitationDemo()
+            notebook = worksheet
+            currentIndex = 0
+            lastTemplate = worksheet.pages[0].template
+            settings = worksheet.settings ?? NotebookSettings()
+            selectedLayerID = worksheet.agenticLayers.first?.id
+            currentDrawingLayerID = worksheet.pages[0].drawingLayers[0].id
+            selectedImageID = nil
+            lassoRect = nil
+            isLassoActive = false
+            isAnalyzing = false
+            agentError = nil
+        } catch {
+            agentError = "The citation demo could not be reset. Rebuild the app and try again."
+        }
+    }
+#endif
+
     // MARK: Derived
 
     var pageCount: Int { notebook.pages.count }
@@ -760,9 +783,9 @@ final class NotebookViewModel: ObservableObject {
             agentError = "Sign in with OpenAI to place guidance Pins."
             return
         }
-        let knowledgeSearcher: any KnowledgeSearching
+        let knowledgeContext: (searcher: any KnowledgeSearching, hasImportedTextbook: Bool)
         do {
-            knowledgeSearcher = try resolvedTextbookKnowledgeSearcher()
+            knowledgeContext = try resolvedTextbookKnowledgeContext()
         } catch {
             agentError = "The imported textbook index couldn't be read. Re-import the textbook and try again."
             return
@@ -777,7 +800,8 @@ final class NotebookViewModel: ObservableObject {
         interventionNotice = nil
         let client = OpenAICodexVisionClient(
             route: route,
-            knowledgeSearcher: knowledgeSearcher,
+            knowledgeSearcher: knowledgeContext.searcher,
+            requiresTextbookSearch: knowledgeContext.hasImportedTextbook,
             onToolInvocation: { [weak self] invocation in
                 Task { @MainActor [weak self] in
                     guard let self, self.ownsAnalysis(requestID) else { return }
@@ -1090,14 +1114,18 @@ final class NotebookViewModel: ObservableObject {
         }
 
         let trimmedQuestion = question?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        guard parentPin != nil || trimmedQuestion != nil else {
+            agentError = "Ask a question before sending the selected work."
+            return
+        }
         let submittedQuestion = continuationQuestion(
             trimmedQuestion,
             parent: parentPin,
             parentMessageID: resolvedParentMessageID
         )
-        let knowledgeSearcher: any KnowledgeSearching
+        let knowledgeContext: (searcher: any KnowledgeSearching, hasImportedTextbook: Bool)
         do {
-            knowledgeSearcher = try resolvedTextbookKnowledgeSearcher()
+            knowledgeContext = try resolvedTextbookKnowledgeContext()
         } catch {
             agentError = "The imported textbook index couldn't be read. Re-import the textbook and try again."
             return
@@ -1111,14 +1139,15 @@ final class NotebookViewModel: ObservableObject {
         lastGuidanceSelection = nil
         lastInterventionIntent = nil
         let requestID = beginAnalysis(
-            question: trimmedQuestion ?? (parentPin == nil ? "Guide this page" : "Explain this further"),
+            question: trimmedQuestion ?? "Explain this further",
             parentThreadID: parentThreadID,
             parentMessageID: resolvedParentMessageID,
             createsFork: createsFork
         )
         agentError = nil
         let client = AgentInsightClientFactory.make(
-            knowledgeSearcher: knowledgeSearcher,
+            knowledgeSearcher: knowledgeContext.searcher,
+            requiresTextbookSearch: knowledgeContext.hasImportedTextbook,
             onToolInvocation: { [weak self] invocation in
                 Task { @MainActor [weak self] in
                     guard let self, self.ownsAnalysis(requestID) else { return }
@@ -1248,13 +1277,19 @@ final class NotebookViewModel: ObservableObject {
     /// worksheet. PDF import is the only producer of these sidecars. A missing
     /// sidecar across the library uses the documented bundled demo corpus;
     /// malformed sidecar data is allowed to fail rather than being hidden.
-    private func resolvedTextbookKnowledgeSearcher() throws -> any KnowledgeSearching {
+    private func resolvedTextbookKnowledgeContext() throws -> (
+        searcher: any KnowledgeSearching,
+        hasImportedTextbook: Bool
+    ) {
         for candidate in store.notebooks where candidate.id != notebook.id {
             if let corpusData = try store.knowledgeCorpusData(forImportedTextbook: candidate.id) {
-                return try OfflineTextbookKnowledgeSearcher.resolvingImportedCorpus(corpusData)
+                return (
+                    try OfflineTextbookKnowledgeSearcher.resolvingImportedCorpus(corpusData),
+                    true
+                )
             }
         }
-        return try OfflineTextbookKnowledgeSearcher.resolvingImportedCorpus(nil)
+        return (try OfflineTextbookKnowledgeSearcher.resolvingImportedCorpus(nil), false)
     }
 
     /// Current page plus at most one immediate neighbor on either side. These

@@ -438,7 +438,7 @@ struct NotebookToolbar: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("refinement-lasso-send-to-chat")
             .accessibilityLabel("Send selection to chat")
-            .accessibilityHint("Draw around notebook content to send it directly to Pin Chat")
+            .accessibilityHint("Draw around notebook content to add it to Notebook Chat, then ask a question")
 
             refinementMenuDivider
 
@@ -939,26 +939,112 @@ struct NotebookToolbarSettingsView: View {
     let isAnalysisAccessConfigured: Bool
     let analysisAccessSummary: String
     let onEditAnalysisAccess: () -> Void
-    let onDismiss: () -> Void
+    let onResetTextbookCitationDemo: () -> Void
 
-    private let columns = Array(repeating: GridItem(.fixed(34), spacing: 12), count: 6)
+    @Environment(\.dismiss) private var dismiss
+
+#if TEXTBOOK_CITATION_DEMO
+    @State private var confirmsTextbookCitationDemoReset = false
+#endif
+
+    private let colorColumns = [
+        GridItem(.adaptive(minimum: 34, maximum: 34), spacing: 12),
+    ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Notebook Controls")
-                    .font(.headline)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    analysisSection
+                    Divider()
+                    floatingToolbarSection
+                    Divider()
+                    pageNavigationSection
+                    Divider()
+                    topToolbarSection
+                    Divider()
+                    pencilSection
 
-                Text("Working toolbar")
-                    .font(.subheadline.weight(.semibold))
+#if TEXTBOOK_CITATION_DEMO
+                    Divider()
+                    citationDemoSection
+#endif
 
-                Group {
-                    Toggle("Writing tools", isOn: $vm.settings.showsWritingTools)
-                        .accessibilityIdentifier("settings-writing-tools")
-                    Toggle("Layers", isOn: $vm.settings.showsLayers)
-                        .accessibilityIdentifier("settings-agentic-layers")
+                    Divider()
+                    favoriteColorsSection
                 }
-                .font(.subheadline)
+                .frame(maxWidth: 760, alignment: .leading)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("Notebook Controls")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                        .accessibilityIdentifier("notebook-controls-done")
+                }
+            }
+        }
+        .accessibilityIdentifier("notebook-toolbar-settings")
+#if TEXTBOOK_CITATION_DEMO
+        .confirmationDialog(
+            "Reset the citation demo?",
+            isPresented: $confirmsTextbookCitationDemoReset,
+            titleVisibility: .visible
+        ) {
+            Button("Reset Demo Notebooks", role: .destructive, action: onResetTextbookCitationDemo)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes every current notebook and restores the prepared demo state.")
+        }
+#endif
+    }
+
+    private var floatingToolbarSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(
+                "Floating Toolbar",
+                detail: "Choose which groups appear in the movable writing toolbar."
+            )
+
+            VStack(spacing: 0) {
+                settingsToggle(
+                    "Writing tools",
+                    detail: "Show pen, marker, eraser, lasso, image, and undo controls.",
+                    isOn: $vm.settings.showsWritingTools,
+                    systemImage: "pencil.tip"
+                )
+                .accessibilityIdentifier("settings-writing-tools")
+                Divider().padding(.leading, 50)
+                settingsToggle(
+                    "Layers",
+                    detail: "Show the entry point for drawing and Agentic Layers.",
+                    isOn: $vm.settings.showsLayers,
+                    systemImage: "square.3.layers.3d"
+                )
+                .accessibilityIdentifier("settings-agentic-layers")
+            }
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
+        }
+    }
+
+    private var pageNavigationSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(
+                "Page Navigation",
+                detail: "Choose the direction used when moving between notebook pages."
+            )
+
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Scroll direction", systemImage: "arrow.left.and.right")
+                    .font(.subheadline.weight(.medium))
 
                 Picker("Page scroll direction", selection: $vm.settings.pageScrollDirection) {
                     ForEach(NotebookPageScrollDirection.allCases) { direction in
@@ -967,102 +1053,210 @@ struct NotebookToolbarSettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("settings-page-scroll-direction")
-
-                Divider()
-
-                Text("Top toolbar")
-                    .font(.subheadline.weight(.semibold))
-
-                Group {
-                    Toggle("Export", isOn: $vm.settings.showsExport)
-                        .accessibilityIdentifier("settings-export")
-                    Toggle("Page lock", isOn: $vm.settings.showsPageLock)
-                        .accessibilityIdentifier("settings-page-lock")
-                }
-                .font(.subheadline)
-
-                Divider()
-
-                Text("Apple Pencil")
-                    .font(.headline)
-
-                Group {
-                    Toggle("Double-tap follows system action", isOn: $pencilDoubleTapEnabled)
-                        .accessibilityIdentifier("settings-pencil-double-tap")
-                    Toggle("Squeeze shows shortcuts", isOn: $pencilSqueezeEnabled)
-                        .accessibilityIdentifier("settings-pencil-squeeze")
-                    Toggle("Hover ink preview", isOn: $pencilHoverPreviewEnabled)
-                        .accessibilityIdentifier("settings-pencil-hover")
-                }
-                .font(.subheadline)
-
-                Text("Double-tap and squeeze honor the actions selected in Settings › Apple Pencil.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Divider()
-
-                Text("Analysis")
-                    .font(.headline)
-
-                Button(action: onEditAnalysisAccess) {
-                    HStack(spacing: 12) {
-                        Image(systemName: isAnalysisAccessConfigured ? "key.fill" : "key")
-                            .frame(width: 24)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Notebook analysis access")
-                                .foregroundStyle(.primary)
-                            Text(analysisAccessSummary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Notebook analysis access")
-                .accessibilityValue(analysisAccessSummary)
-                .accessibilityIdentifier("settings-analysis-access")
-                .accessibilityHint("View or configure agent provider access for notebook analysis")
-
-                Divider()
-
-                Text("Favorite Colors")
-                    .font(.headline)
-
-                Text("Favorites appear first in the ink color picker.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(InkPalette.standard, id: \.self) { hex in
-                        favoriteSwatch(hex)
-                    }
-                }
-
-                Button {
-                    vm.toggleFavoriteColor(vm.inkColorHex)
-                } label: {
-                    Label(
-                        vm.isFavoriteColor(vm.inkColorHex) ? "Remove current color" : "Add current color",
-                        systemImage: vm.isFavoriteColor(vm.inkColorHex) ? "heart.slash" : "heart"
-                    )
-                }
-                .font(.subheadline)
             }
-            .padding(20)
+            .padding(14)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
         }
-        .frame(width: 340, height: 520)
-        .accessibilityIdentifier("notebook-toolbar-settings")
-        .onDisappear(perform: onDismiss)
+    }
+
+    private var topToolbarSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(
+                "Top Toolbar",
+                detail: "Keep page-level actions visible beside the notebook title."
+            )
+
+            VStack(spacing: 0) {
+                settingsToggle(
+                    "Export",
+                    detail: "Show PDF and SPUD export in the top toolbar.",
+                    isOn: $vm.settings.showsExport,
+                    systemImage: "square.and.arrow.up"
+                )
+                .accessibilityIdentifier("settings-export")
+                Divider().padding(.leading, 50)
+                settingsToggle(
+                    "Page lock",
+                    detail: "Show a quick control for preventing page edits.",
+                    isOn: $vm.settings.showsPageLock,
+                    systemImage: "lock"
+                )
+                .accessibilityIdentifier("settings-page-lock")
+            }
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
+        }
+    }
+
+    private var pencilSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(
+                "Apple Pencil",
+                detail: "Choose which hardware gestures and previews TuberNotes responds to."
+            )
+
+            VStack(spacing: 0) {
+                settingsToggle(
+                    "Double-tap follows system action",
+                    detail: "Use the double-tap action selected in iPad Settings.",
+                    isOn: $pencilDoubleTapEnabled,
+                    systemImage: "hand.tap"
+                )
+                .accessibilityIdentifier("settings-pencil-double-tap")
+                Divider().padding(.leading, 50)
+                settingsToggle(
+                    "Squeeze shows shortcuts",
+                    detail: "Open the Pencil shortcut palette when supported.",
+                    isOn: $pencilSqueezeEnabled,
+                    systemImage: "pencil.tip.crop.circle"
+                )
+                .accessibilityIdentifier("settings-pencil-squeeze")
+                Divider().padding(.leading, 50)
+                settingsToggle(
+                    "Hover ink preview",
+                    detail: "Preview the active ink before the Pencil touches the page.",
+                    isOn: $pencilHoverPreviewEnabled,
+                    systemImage: "pencil.and.outline"
+                )
+                .accessibilityIdentifier("settings-pencil-hover")
+            }
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
+
+            Text("Double-tap and squeeze honor the actions selected in Settings › Apple Pencil.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var analysisSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(
+                "OpenAI Sign-in",
+                detail: "Current account status for live notebook analysis."
+            )
+
+            Button(action: onEditAnalysisAccess) {
+                HStack(spacing: 12) {
+                    Image(systemName: isAnalysisAccessConfigured ? "key.fill" : "key")
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 26)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isAnalysisAccessConfigured ? "Signed in" : "OpenAI account")
+                            .foregroundStyle(.primary)
+                        Text(analysisAccessSummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
+            .accessibilityLabel("Notebook analysis access")
+            .accessibilityValue(analysisAccessSummary)
+            .accessibilityIdentifier("settings-analysis-access")
+            .accessibilityHint("View or configure agent provider access for notebook analysis")
+        }
+    }
+
+#if TEXTBOOK_CITATION_DEMO
+    private var citationDemoSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(
+                "Citation Demo",
+                detail: "Restore the prepared worksheet and textbook used for the citation journey."
+            )
+
+            Button(role: .destructive) {
+                confirmsTextbookCitationDemoReset = true
+            } label: {
+                Label("Reset Citation Demo", systemImage: "arrow.counterclockwise")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("settings-reset-textbook-citation-demo")
+        }
+    }
+#endif
+
+    private var favoriteColorsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(
+                "Favorite Colors",
+                detail: "Favorites appear first in the ink color picker."
+            )
+
+            LazyVGrid(columns: colorColumns, alignment: .leading, spacing: 12) {
+                ForEach(InkPalette.standard, id: \.self) { hex in
+                    favoriteSwatch(hex)
+                }
+            }
+
+            Button {
+                vm.toggleFavoriteColor(vm.inkColorHex)
+            } label: {
+                Label(
+                    vm.isFavoriteColor(vm.inkColorHex) ? "Remove current color" : "Add current color",
+                    systemImage: vm.isFavoriteColor(vm.inkColorHex) ? "heart.slash" : "heart"
+                )
+            }
+            .buttonStyle(.bordered)
+            .font(.subheadline)
+        }
+    }
+
+    private func settingsHeading(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func settingsToggle(
+        _ title: String,
+        detail: String,
+        isOn: Binding<Bool>,
+        systemImage: String
+    ) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 11)
+        }
+        .padding(.horizontal, 14)
     }
 
     private func favoriteSwatch(_ hex: String) -> some View {

@@ -1,6 +1,6 @@
 # PC-26 — Live `search_textbook` in the normal agent path
 
-Status: **implementation complete — awaiting Phillip's manual verdict**
+Status: **citation-first demo polish deployed — awaiting Phillip's verdict**
 
 Target branch: `main`
 
@@ -87,6 +87,73 @@ PC-27 and does not belong in this session.
 
 ## Session log
 
+- 2026-07-21 — Added a `TEXTBOOK_CITATION_DEMO`-only first-chat script. On the
+  first empty Notebook Chat presentation it focuses the normal composer, types
+  “Why does an SN1 reaction at a chiral carbon produce racemization rather than
+  retention?” at 80 ms per character, then calls the ordinary Send path. The
+  task cancels if the chat disappears; non-demo builds and established threads
+  are unchanged. Parse and diff checks passed; the flagged signed Release
+  rebuilt, installed, and launched normally on the pinned iPad. Artifacts:
+  `tmp/verify/pc26-live-textbook-search/demo-autotype/`.
+- 2026-07-21 — Removed the `TEXTBOOK_CITATION_DEMO` special case that opened
+  Notebook Chat whenever a notebook appeared. All notebooks now start with chat
+  closed; the toolbar and Send-to-Chat lasso remain the explicit entry points.
+  Parse and diff checks passed; the flagged signed Release rebuilt, installed,
+  and launched normally on the pinned iPad. Artifacts:
+  `tmp/verify/pc26-live-textbook-search/no-auto-chat/`.
+- 2026-07-21 — Phillip reported no visible clickable textbook page after a
+  successful cited answer. Pulled the live redacted diagnostics: the latest
+  request was a forced `search_textbook` turn with one returned typed hit,
+  followed by a successful text turn (`returned_hits: 1`). The data path was
+  intact; the chip rendered after the entire answer and was hidden below the
+  keyboard-constrained viewport. Moved the citation action above the answer,
+  restyled it as a full-width `Open textbook · Page N` button, and dismiss the
+  keyboard on Send. The flagged signed Release rebuilt and installed; the first
+  launch was device-lock denied and the immediate unlocked retry launched
+  normally. Artifacts: `tmp/verify/pc26-live-textbook-search/citation-visibility-fix/`.
+  Awaiting Phillip's tap/navigation verdict.
+- 2026-07-21 — Phillip confirmed the repaired live loop works, then requested
+  recording polish. When an actual imported textbook corpus is available, the
+  initial provider turn now requires `search_textbook`; the linked follow-up
+  returns to automatic selection so the model can answer. The citation boundary
+  remains unchanged: chips are constructed only from returned `KnowledgeHit`
+  fields. Replaced the vague seeded prompt with an explicit SN1
+  retention/inversion/racemization question and bumped the opt-in seed to v2.
+  Removed the normal continuation strip; fork context remains cancellable.
+  While the keyboard composer has focus, Notebook Chat compacts its header and
+  hides the model selector to preserve transcript space. Swift parse and diff
+  checks passed. Exact-device preflight passed; the flagged signed Release build
+  succeeded, installed, and launched normally on Phillip's pinned iPad.
+  Artifacts: `tmp/verify/pc26-live-textbook-search/demo-polish/`. Awaiting
+  Phillip's behavioral and layout verdict.
+- 2026-07-21 — Pulled the first redacted live failure log from the iPad. Exact
+  evidence: HTTP 200; completed SSE stream; function-call argument and
+  output-item events present; terminal status `completed`; rejection gate
+  `empty_final_content`. Root cause was decoder precedence: a present-but-empty
+  terminal `output` array incorrectly won over nonempty streamed
+  `response.output_item.done` items, discarding the valid function call. Fixed
+  precedence to prefer nonempty terminal output, then nonempty streamed items,
+  then a legitimate empty terminal output for `output_text` extraction. Added a
+  focused regression reproducing that exact event shape; the full PC-26 check
+  executable passed. The flagged signed Release rebuilt, installed, and launched
+  normally on the pinned iPad. Diagnostics remain active for the next manual
+  attempt; behavioral success still requires Phillip's verdict.
+- 2026-07-21 — Phillip's first flagged normal-app attempt exposed three invalid
+  demo behaviors: Send to Chat auto-submitted a synthetic `Guide this page`
+  prompt, the surface was labeled Pin Chat, and the provider result was rejected
+  as unreadable. Removed the implicit submission and fallback prompt. A
+  Send-to-Chat lasso now opens Notebook Chat, attaches the selection to the next
+  explicit keyboard question, focuses the composer, and suppresses the lasso
+  context menu. Added bounded, redacted JSONL diagnostics for HTTP status class,
+  SSE event/output/tool shape, loop turn, local hit count, and exact rejection
+  gate; prompts, images, excerpts, response prose, headers, credentials, and raw
+  bodies are never logged. Also requests serial tool calls and accepts validated
+  `response.output_item.done` output when a terminal envelope omits `output`.
+  Flagged whole-source typecheck and signed Release build passed; the corrected
+  app installed and launched normally on the pinned iPad. Awaiting one manual
+  reproduction, then pull `Documents/agent-runtime-diagnostics.jsonl` into
+  `tmp/verify/pc26-live-textbook-search/critical-notebook-chat-fix/` before
+  making any causal claim about the provider rejection.
 - 2026-07-21 — Implemented the normal-app `search_textbook` loop under Phillip's
   implementation-only go-mode override; no Release/device/human-review tooling
   was run. The request shape is bounded to three provider responses and two

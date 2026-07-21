@@ -1960,6 +1960,236 @@ Status: **implementation merged and Release-delivered — Phillip's verdict pend
   `tmp/build/ipados26-fullscreen/`. Phillip's live landscape full-screen verdict
   remains required; no behavioral success is claimed yet.
 
+## Active line — PC-30: restore the rich page-settings lightbox
+
+Status: **implementation complete and Release-delivered — awaiting Phillip's verdict**
+
+Target branch: `main`
+
+Owner: App/Notebook page-settings presentation. Existing page navigation,
+toolbar composition, document settings, and SpatialCanvas behavior are
+unchanged.
+
+### Objective and user-visible outcome
+
+Restore the complete visual page-settings lightbox from `origin/sive/dev` after
+the later `main` integration flattened it. The normal app should retain the
+gallery layout while restoring descriptive drawing rows, the complete zoom
+controls, a labeled placed-image section, stronger template selection styling,
+the ruled-paper margin preview, and the branch's accessibility identifiers and
+selected trait.
+
+### Scope, non-goals, and dependencies
+
+- In scope: `TuberNotes/Notebook/NotebookView.swift` and this plan log.
+- Non-goals: restoring the removed page-navigation toolbar/settings control,
+  changing page-setting persistence, altering image-arrangement behavior, or
+  importing unrelated `sive/dev` code.
+- Dependency: preserve all newer `main` call sites and state contracts around
+  `PageSettingsLightbox`.
+
+### Work and verification
+
+1. Diff the remote branch lightbox against `main` and restore only its richer
+   presentation and accessibility details.
+2. Run focused source/diff checks and inspect the final diff for unrelated
+   churn.
+3. Pin Phillip's explicitly named iPad, then build, install, and launch the
+   normal Release app without a Debug scenario.
+4. Leave visual taste and interaction acceptance to Phillip in the normal app.
+
+### Acceptance evidence and stop conditions
+
+- The richer lightbox elements are present and page navigation stays absent.
+- `git diff --check` and a canonical signed Release build/install/launch pass.
+- Stop after delivery, an unavailable named device, two verification failures
+  without a narrower fix, or any required expansion beyond this presentation
+  repair.
+
+### Session log
+
+- 2026-07-21 — Phillip confirmed that page-navigation removal is intentional
+  and requested restoration of the richer `origin/sive/dev` page-settings
+  lightbox. Scoped PC-30 to a selective presentation repair on `main`.
+- 2026-07-21 — Restored the rich lightbox presentation and accessibility
+  details without restoring page-navigation UI or changing settings behavior.
+  `git diff --check` passed. Device preflight, signed Release build, install,
+  normal no-scenario launch, and live-process query passed on Phillip's iPad
+  `2DD98ECC-A26A-5730-943B-01DD63DC4117` (UDID
+  `00008103-000145D91107001E`, PID 2836). Evidence is under
+  `tmp/verify/pc30-page-settings-lightbox/`; Phillip's normal-app visual and
+  interaction verdict remains required.
+
+## Active line — PC-31: promote Notebook Controls to a lightbox
+
+Status: **crash repair Release-delivered — awaiting Phillip's verdict**
+
+Target branch: `main`
+
+Owner: App/Notebook settings presentation. Notebook-setting persistence,
+provider access, toolbar composition, and SpatialCanvas behavior are unchanged.
+
+### Objective and user-visible outcome
+
+Replace the gear button's compact Notebook Controls popover with a large,
+sectioned lightbox using the same visual language as the restored Page Settings.
+Preserve every current control and callback, including the concurrent citation-
+demo reset UI, while keeping the intentionally removed page-navigation toggle
+absent.
+
+### Scope, non-goals, and dependencies
+
+- In scope: `TuberNotes/Notebook/NotebookView.swift`,
+  `TuberNotes/Notebook/NotebookToolbar.swift`, and this plan log.
+- Non-goals: restoring page-navigation controls, changing persisted settings,
+  modifying provider/login behavior, or rewriting toolbar behavior.
+- Dependency: preserve concurrent textbook-citation changes already present in
+  the shared worktree.
+
+### Work and verification
+
+1. Move Notebook Controls presentation from the gear-attached popover to the
+   existing notebook sheet stack.
+2. Recompose the same controls into accessible, descriptive lightbox sections.
+3. Run source/diff checks and inspect the final diff for unrelated churn.
+4. Pin Phillip's named iPad and perform a signed Release build, install, and
+   normal no-scenario launch.
+
+### Acceptance evidence and stop conditions
+
+- The gear opens a visibly full Notebook Controls lightbox with all current
+  settings reachable and no page-navigation toggle.
+- Provider handoff, dismissal, and citation-demo reset callbacks remain wired.
+- `git diff --check` and signed Release delivery pass.
+- Stop after delivery, an unavailable named device, two verification failures
+  without a narrower fix, or any required expansion beyond presentation.
+
+### Session log
+
+- 2026-07-21 — Phillip clarified that Notebook Controls also needs the updated
+  settings treatment. Current remote commits and live collaborator worktrees
+  contain only the old compact popover, so PC-31 targets the requested visible
+  lightbox outcome while retaining their control set and current `main` seams.
+- 2026-07-21 — Replaced the gear-attached popover with a large grouped-system
+  sheet and recomposed the existing controls into Floating Toolbar, Page
+  Navigation, Top Toolbar, Apple Pencil, Notebook Analysis, optional Citation
+  Demo, and Favorite Colors sections. Page-navigation visibility remains
+  intentionally absent; only scroll direction remains. The concurrent citation-
+  demo reset seam was preserved. Combined PC-31/PC-32 signed Release build,
+  install, normal launch, and process query passed on Phillip's iPad
+  `2DD98ECC-A26A-5730-943B-01DD63DC4117` (PID 2842 at launch; PID 2843 on final
+  presence query). Evidence is under
+  `tmp/verify/pc31-pc32-settings-sso/`; Phillip's visual verdict remains.
+- 2026-07-21 — Phillip reported that tapping Notebook Analysis dismissed and
+  relaunched the app instead of showing sign-in. Two device crash reports at
+  14:56:57 and 14:57:07 confirm a SwiftUI `SIGTRAP` in
+  `NavigationColumnState.boundPathChange` during the settings-sheet/provider-
+  overlay handoff. Reopened PC-31 for ordered sheet dismissal and removal of
+  the provider overlay's unnecessary nested navigation container.
+- 2026-07-21 — Repaired the handoff by moving provider presentation to the
+  settings sheet's actual `onDismiss`, yielding once before overlay insertion,
+  and removing the provider overlay's nested `NavigationStack`. Moved OpenAI
+  Sign-in to the top of Notebook Controls and replaced the incorrect Release
+  `Demo mode` summary with live signed-out, preparing, waiting, checking,
+  signed-in, and attention-required states. Signed Release build, install,
+  normal launch, and process query passed on the pinned iPad (PID 2846).
+  Evidence, including both pre-fix crash reports, is under
+  `tmp/verify/pc31-pc32-provider-handoff-repair/`. Phillip's tap-path verdict is
+  required; no behavioral success is claimed.
+
+## Active line — PC-32: simplify and deglassify OpenAI sign-in
+
+Status: **implementation repaired — awaiting an uncontested Release delivery slot and Phillip's verdict**
+
+Target branch: `main`
+
+Owner: App-owned provider/login presentation, preserving AgentHarness transport
+and credential ownership. Coordinating agent retains integration and delivery.
+
+### Objective and user-visible outcome
+
+Replace the illegible glass-heavy temporary OpenAI sign-in card with a calm,
+opaque, minimal state-driven experience. Show only the applicable primary auth
+action: check sign-in state when it is unknown/stale, sign in when signed out
+(retaining the code-and-browser flow), or sign out when signed in. Keep concise
+progress, verification-code, and recoverable-error information only when useful.
+
+### Scope, non-goals, and dependencies
+
+- In scope: the existing provider/OpenAI SSO presentation file(s) and this plan
+  log.
+- Non-goals: changing OAuth/SSO transport, credential storage, refresh-token or
+  access-token lifetime, provider secrets, runtime authorization, or model
+  routing.
+- Dependency: preserve the PC-10 Keychain-isolated refresh, memory-only access-
+  token, and no-provider-secret boundary.
+
+### Work and verification
+
+1. A bounded subagent implements only the SSO presentation and reports its
+   state-to-action mapping and integration risks.
+2. The coordinating agent inspects and integrates the diff with PC-31.
+3. Under the PC-10 go-mode override, do not run Debug scenarios, adapter tests,
+   recorded routes, screenshots, or behavioral verification.
+4. After implementation completes, perform one normal Release build, install,
+   and launch on Phillip's explicitly named iPad.
+
+### Acceptance evidence and stop conditions
+
+- The glass-heavy card and excessive explanatory copy are gone.
+- Unknown/checking, signed-out/signing-in, code-ready, failure, and signed-in
+  states expose only concise relevant status and the correct auth action.
+- Existing sign-in, browser/code, refresh-check, sign-out, and model behavior
+  remain wired without provider-secret or token-boundary changes.
+- Stop after Release delivery; Phillip alone performs behavioral acceptance in
+  the normal app.
+
+### Session log
+
+- 2026-07-21 — Phillip supplied a normal-app screenshot showing unreadable
+  glass/copy composition and explicitly requested parallel implementation.
+  Delegated the isolated SSO presentation repair while the coordinating agent
+  completes PC-31; no auth-contract changes are authorized.
+- 2026-07-21 — The bounded subagent changed only
+  `TuberNotes/Notebook/AgentSidebarView.swift`; coordinating review confirmed
+  the auth/session transport, Keychain boundary, browser launch callback, model
+  save, and provider routing remain intact. The provider popup now uses opaque
+  grouped-system surfaces with no forced dark mode or frosted card. Its auth UI
+  maps signed out/nonrecoverable failure to **Sign in**, code/polling and cached-
+  session recovery to **Check sign-in**, signed in to **Sign out**, and active
+  transitions to concise progress. Excess policy copy and alternate-browser
+  controls were removed. `git diff --check`, required-state source checks, and
+  changed-diff credential-pattern scan passed. Combined PC-31/PC-32 signed
+  Release build, install, normal launch, and process query passed on the exact
+  pinned iPad (PID 2842 at launch; PID 2843 on final presence query). No Debug
+  scenario, automated login, provider request,
+  screenshot capture, or behavioral verification ran; Phillip's normal-app
+  verdict is the acceptance gate.
+- 2026-07-21 — Removed the provider popup's newly introduced nested navigation
+  container identified by the device crash reports, retaining the opaque
+  grouped-system card, simplified state actions, model picker, Save/Cancel,
+  browser/code flow, and all auth storage/transport boundaries. The combined
+  repair was Release-built, installed, and normally launched on the exact iPad;
+  Phillip alone verifies the real sign-in journey.
+- 2026-07-21 — Phillip's real sign-in attempt reached `auth.openai.com` through
+  the ephemeral private-session presenter and received
+  `primaryapi_server_error`. The prior existing-session browser route had been
+  removed from the simplified UI, leaving no usable fallback. Reopened PC-32
+  to make the existing-session browser the default code-entry route while
+  keeping the code visible/copied and the app's polling state recoverable.
+- 2026-07-21 — The existing-session route now copies the live device code and
+  opens embedded Safari. Code-ready/polling state exposes both **Sign in**
+  (reopen the browser with that code) and **Check sign-in** (poll status), so a
+  closed browser no longer strands the user. Phillip's normal-app attempt
+  confirmed that the OpenAI device-code page works, but exposed a transparent
+  redundant SwiftUI header behind the native Safari window: its title, code,
+  and Close button collided with the iPad status bar and notebook chrome.
+  Removed that outer header; embedded Safari is now the sole browser sheet,
+  using its native close control, while Settings retains the live code and
+  recovery actions. Source diff checks passed. Per Phillip's halt request, no
+  build, install, or launch followed because another Release delivery was in
+  progress.
+
 ## Planned line — PC-24 … PC-29: recorded textbook-citation demo
 
 Status: **implementation complete — manual normal-app feedback and capture deferred to Phillip**
@@ -1974,9 +2204,9 @@ Child work lines:
 
 | Line | Child plan | Owner subsystem | `CONTRACT:` | Status |
 |---|---|---|---|---|
-| PC-24 | [`PC-24-PDFNotebookImport.md`](PC-24-PDFNotebookImport.md) | Notebook | no | implementation complete — manual feedback deferred |
+| PC-24 | [`PC-24-PDFNotebookImport.md`](PC-24-PDFNotebookImport.md) | Notebook | no | flagged demo seed Release-deployed — awaiting Phillip's verdict |
 | PC-25 | [`PC-25-TextbookCorpusExtraction.md`](PC-25-TextbookCorpusExtraction.md) | Knowledge | no | implementation complete — focused checks pass |
-| PC-26 | [`PC-26-LiveTextbookSearchTool.md`](PC-26-LiveTextbookSearchTool.md) | App / AI boundary | no | implementation complete — focused checks pass |
+| PC-26 | [`PC-26-LiveTextbookSearchTool.md`](PC-26-LiveTextbookSearchTool.md) | App / AI boundary | no | citation-first demo polish deployed — awaiting Phillip's verdict |
 | PC-27 | [`PC-27-GroundedCitationChips.md`](PC-27-GroundedCitationChips.md) | App + Notebook chat | **yes** | implementation complete — focused checks pass |
 | PC-28 | [`PC-28-CrossNotebookNavigation.md`](PC-28-CrossNotebookNavigation.md) | App coordination | **yes** | implementation complete — focused checks pass |
 | PC-29 | [`PC-29-DemoContentCaptureRig.md`](PC-29-DemoContentCaptureRig.md) | DeveloperSupport | no | content artifacts complete — manual capture deferred |
@@ -2029,6 +2259,65 @@ suite failure.
 
 ### Session log
 
+- 2026-07-21 — Added demo-flag-only composer automation: the first empty
+  Notebook Chat types a legitimate SN1 racemization question at a visible
+  character cadence and submits through the normal Send path. Production builds
+  and existing threads are unaffected. The flagged signed Release rebuilt,
+  installed, and launched normally on the pinned iPad.
+- 2026-07-21 — Removed demo-build Notebook Chat auto-opening. Notebook entry
+  now always starts with chat closed, while its toolbar and Send-to-Chat entry
+  points remain unchanged. The flagged signed Release rebuilt, installed, and
+  launched normally on the pinned iPad.
+- 2026-07-21 — Live diagnostics proved the reported missing citation UI was not
+  a retrieval failure: the forced search returned one typed hit and the answer
+  completed with that hit retained. The citation chip was below the long answer
+  and hidden by the keyboard viewport. It now appears before the answer as a
+  full-width `Open textbook · Page N` action, and Send dismisses the keyboard.
+  The flagged signed Release rebuilt, installed, and launched on the pinned
+  iPad after one expected locked-device launch denial. Phillip's tap/navigation
+  verdict remains pending.
+- 2026-07-21 — After Phillip confirmed the repaired live loop works, PC-26's
+  recording polish now forces the initial `search_textbook` call whenever a real
+  imported corpus is present, while continuing to derive citation chips only
+  from returned typed hits. The v2 seeded worksheet asks the explicit SN1
+  retention/inversion/racemization question. Normal continuation chrome was
+  removed, and keyboard focus compacts Notebook Chat's header and hides the
+  model selector. Exact-device preflight and flagged signed Release build,
+  install, and normal launch succeeded on the pinned iPad; artifacts are under
+  `tmp/verify/pc26-live-textbook-search/demo-polish/`. Phillip's behavioral and
+  layout verdict remains the gate.
+- 2026-07-21 — Pulled PC-26's redacted failure JSONL and established the exact
+  rejection: HTTP 200 and a completed SSE function-call stream reached
+  `empty_final_content` because a present-but-empty terminal output array
+  shadowed nonempty streamed completed items. Repaired the precedence, added and
+  passed an exact observed-shape regression while retaining text-only empty
+  output support, then rebuilt, installed, and normally launched the flagged
+  Release on the pinned iPad. The next live attempt remains the behavioral gate.
+- 2026-07-21 — Phillip's first live flagged demo attempt failed response parsing
+  and exposed an incorrect auto-submitted `Guide this page` request plus Pin Chat
+  naming. PC-26 follow-up removed all implicit Send-to-Chat submission: that
+  lasso now attaches visual context, suppresses its context menu, opens Notebook
+  Chat, focuses the keyboard composer, and waits for an explicit question.
+  Added content-free runtime protocol-shape logging with exact rejection gates,
+  serial tool selection, and validated output-item SSE fallback. The combined
+  flagged Release (including the concurrent provider-handoff repair) built,
+  installed, and launched on the pinned iPad. No rejection cause is claimed
+  until Phillip reproduces once and the JSONL device log is pulled.
+- 2026-07-21 — Phillip explicitly requested device delivery of the flagged demo
+  build. Exact-device preflight passed on iPad
+  `2DD98ECC-A26A-5730-943B-01DD63DC4117`; the signed Release build with
+  `TEXTBOOK_CITATION_DEMO` succeeded, installed, and launched normally without
+  a Debug scenario. TuberNotes remained present in the device process list and
+  the built bundle contains the verified excerpt. Artifacts are under
+  `tmp/verify/pc24-pdf-notebook-import/demo-seed-deploy/`. No human-review tool
+  ran and Phillip's direct verdict remains the behavioral gate.
+- 2026-07-21 — PC-24 follow-up added opt-in `TEXTBOOK_CITATION_DEMO`
+  first-launch seeding and a confirmed Settings reset. Both paths reuse the real
+  PDF import/corpus pipeline and create a prepared worksheet plus the verified
+  20-page OpenStax excerpt; they do not introduce fixture retrieval or alter
+  typed-hit citation construction. Flagged notebook views start with the sidebar
+  open. Whole-source simulator typechecks passed with and without the condition;
+  device/Release/human review remains deferred by Phillip's go-mode instruction.
 - 2026-07-21 — Integration complete under Phillip's implementation-only
   go-mode override. `CONTRACT:` PC-28 now wires an explicit grounded-citation
   tap through `AgentNavigationRequest.openNotebook`; missing, same-notebook,

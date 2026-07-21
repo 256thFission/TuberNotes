@@ -30,6 +30,9 @@ final class NotebookStore: ObservableObject {
 
     init() {
         reload()
+#if TEXTBOOK_CITATION_DEMO
+        bootstrapTextbookCitationDemoIfNeeded()
+#endif
     }
 
     private var directory: URL {
@@ -219,6 +222,117 @@ final class NotebookStore: ObservableObject {
             thumbnail.draw(in: fittedRect)
         }.pngData()
     }
+
+#if TEXTBOOK_CITATION_DEMO
+    private var textbookCitationDemoMarkerURL: URL {
+        directory.appendingPathComponent(".textbook-citation-demo-v2")
+    }
+
+    /// A demo build owns a deterministic two-notebook library. It seeds once so
+    /// rehearsal edits survive relaunches; only the explicit Settings reset
+    /// reconstructs the state after that.
+    private func bootstrapTextbookCitationDemoIfNeeded() {
+        guard !FileManager.default.fileExists(atPath: textbookCitationDemoMarkerURL.path) else {
+            return
+        }
+
+        do {
+            try resetTextbookCitationDemo()
+        } catch {
+            NSLog("Textbook citation demo seed failed: %@", error.localizedDescription)
+            reload()
+        }
+    }
+
+    @discardableResult
+    func resetTextbookCitationDemo() throws -> Notebook {
+        guard let textbookURL = Bundle.main.url(
+            forResource: "OpenStax Organic Chemistry Ch 11 Demo",
+            withExtension: "pdf"
+        ) else {
+            throw PDFNotebookImportError.unreadable
+        }
+        guard let worksheetImageData = Self.textbookCitationWorksheetImageData() else {
+            throw PDFNotebookImportError.unreadable
+        }
+
+        let storedFiles = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        )
+        for storedFile in storedFiles where
+            storedFile.pathExtension == "json"
+                || storedFile.lastPathComponent.hasPrefix(".textbook-citation-demo-v")
+        {
+            try FileManager.default.removeItem(at: storedFile)
+        }
+        notebooks.removeAll()
+
+        _ = try importPDF(from: textbookURL)
+        let worksheet = Notebook(
+            title: "SN1 Mechanism Worksheet",
+            cover: .indigo,
+            pages: [NotebookPage(
+                template: .plain,
+                images: [PlacedImage(
+                    imageData: worksheetImageData,
+                    rect: CGRect(x: 0, y: 0, width: 1, height: 1)
+                )]
+            )]
+        )
+        save(worksheet)
+        try Data("v2\n".utf8).write(to: textbookCitationDemoMarkerURL, options: .atomic)
+        return worksheet
+    }
+
+    private static func textbookCitationWorksheetImageData() -> Data? {
+        let size = CGSize(width: NotebookPageLayout.size.width * 2, height: NotebookPageLayout.size.height * 2)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor(red: 0.99, green: 0.98, blue: 0.93, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+
+            let ink = UIColor(red: 0.08, green: 0.18, blue: 0.42, alpha: 1)
+            let red = UIColor(red: 0.72, green: 0.12, blue: 0.12, alpha: 1)
+            let marker = UIFont(name: "MarkerFelt-Wide", size: 54) ?? .systemFont(ofSize: 54)
+            let smallMarker = UIFont(name: "MarkerFelt-Thin", size: 43) ?? .systemFont(ofSize: 43)
+            let titleAttributes: [NSAttributedString.Key: Any] = [.font: marker, .foregroundColor: ink]
+            let bodyAttributes: [NSAttributedString.Key: Any] = [.font: smallMarker, .foregroundColor: ink]
+            let errorAttributes: [NSAttributedString.Key: Any] = [.font: marker, .foregroundColor: red]
+
+            NSString(string: "Substitution mechanism check").draw(
+                at: CGPoint(x: 105, y: 115),
+                withAttributes: titleAttributes
+            )
+            NSString(string: "(S)-2-bromobutane  +  OH⁻").draw(
+                at: CGPoint(x: 115, y: 285),
+                withAttributes: bodyAttributes
+            )
+            NSString(string: "SN1").draw(at: CGPoint(x: 660, y: 390), withAttributes: errorAttributes)
+            NSString(string: "CH₃—C⁺H—CH₂CH₃").draw(
+                at: CGPoint(x: 260, y: 515),
+                withAttributes: bodyAttributes
+            )
+            NSString(string: "OH attacks from the same side").draw(
+                at: CGPoint(x: 170, y: 680),
+                withAttributes: bodyAttributes
+            )
+            NSString(string: "→ retained (S)-2-butanol").draw(
+                at: CGPoint(x: 235, y: 825),
+                withAttributes: errorAttributes
+            )
+            NSString(string: "Should this SN1 reaction give retention, inversion,\nor a racemic mixture? Explain why.").draw(
+                with: CGRect(x: 145, y: 1080, width: size.width - 290, height: 180),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: bodyAttributes,
+                context: nil
+            )
+        }
+        return image.pngData()
+    }
+#endif
 
     func delete(_ notebook: Notebook) {
         try? FileManager.default.removeItem(at: url(for: notebook.id))

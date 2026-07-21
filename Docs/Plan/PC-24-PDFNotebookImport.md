@@ -1,6 +1,6 @@
 # PC-24 — PDF import as a notebook
 
-Status: **implementation complete — static checks passed; device delivery prohibited by override**
+Status: **flagged demo seed Release-deployed — awaiting Phillip's verdict**
 
 Target branch: `main`
 
@@ -73,6 +73,30 @@ Do not proceed into corpus extraction (PC-25) in the same session.
 
 ## Session log
 
+- 2026-07-21 — At Phillip's explicit request, ran the canonical device delivery
+  for the demo flag: preflight pinned physical iPad
+  `2DD98ECC-A26A-5730-943B-01DD63DC4117`; a signed Release build with
+  `TEXTBOOK_CITATION_DEMO` succeeded; the resulting app installed and launched
+  normally with no scenario environment; and a follow-up process query found
+  TuberNotes alive as PID 2841. The built bundle contains the 20-page PDF.
+  Build/install/launch logs and the preflight snapshot are under
+  `tmp/verify/pc24-pdf-notebook-import/demo-seed-deploy/`. No human-review tool
+  or automated route ran. Seed appearance, reset behavior, and the complete
+  demo journey await Phillip's direct normal-app verdict; behavioral success is
+  not claimed.
+- 2026-07-21 — Added the opt-in `TEXTBOOK_CITATION_DEMO` build condition. The
+  flagged app now seeds a two-notebook library once from the real PDF import
+  path: a prepared SN1 worksheet plus the verified 20-page OpenStax excerpt and
+  its generated Knowledge corpus. Rehearsal edits survive relaunches. Notebook
+  Controls Settings exposes a confirmed destructive reset that reconstructs
+  those notebooks, and flagged notebook views start with the chat sidebar open;
+  builds without the condition retain their existing state and sidebar default.
+  The bundled excerpt carries source/license/mapping documentation. Whole-source
+  simulator typechecks passed both with and without the condition; the project
+  file, PDF page count/encryption, and final diff checks passed. Per Phillip's
+  go-mode instruction, no device, Release, Debug scenario, or human-review tool
+  ran and no behavioral success is claimed. Evidence is under
+  `tmp/verify/pc24-pdf-notebook-import/demo-seed/`.
 - 2026-07-21 — Implemented the smallest PDFKit-backed notebook import on
   `main`: one `.plain` `NotebookPage` per readable PDF page, one normalized
   full-page `PlacedImage` per page, an explicit visible page-lock control, a
