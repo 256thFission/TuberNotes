@@ -2197,8 +2197,8 @@ Status: **complete**
 ### Objective
 
 Create the repository-level README in the project's candid hackathon voice,
-using the supplied Devpost narrative and the requested OpenAI SSO/ChatGPT
-subscription promise.
+using the supplied Devpost narrative while documenting the actual product,
+its local-first notebook flow, AI boundary, requirements, and project layout.
 
 ### Scope and non-goals
 
@@ -2220,6 +2220,10 @@ inspection. Stop after prose and Markdown inspection.
   TestFlight contact. Markdown-only scope; no product behavior changed.
 - 2026-07-21 — Restored after a subsequent history rewrite reset `main` past
   the original README commit; no product behavior changed.
+- 2026-07-21 — Expanded the README into project documentation: core notebook
+  features, Magic Lasso/Pins workflow, current auth boundary, iPad/Xcode
+  requirements, local storage behavior, source layout, and license link. The
+  candid Devpost voice and beta contact remain intact.
 
 ## Active line — PC-33: scrapbook notebook thumbnails
 
