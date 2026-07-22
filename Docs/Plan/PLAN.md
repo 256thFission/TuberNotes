@@ -2190,6 +2190,37 @@ progress, verification-code, and recoverable-error information only when useful.
   build, install, or launch followed because another Release delivery was in
   progress.
 
+## Active line — PC-34: project README
+
+Status: **complete**
+
+### Objective
+
+Create the repository-level README in the project's candid hackathon voice,
+using the supplied Devpost narrative and the requested OpenAI SSO/ChatGPT
+subscription promise.
+
+### Scope and non-goals
+
+- `README.md`
+- this plan entry
+
+No product, build, distribution, credential, or device behavior changes.
+
+### Acceptance evidence and stop condition
+
+The README gives a clear project overview, describes the magic-lasso workflow,
+includes the development story and beta contact, and passes Markdown
+inspection. Stop after prose and Markdown inspection.
+
+### Session log
+
+- 2026-07-21 — Added the root `README.md` with the supplied Devpost voice,
+  explicit OpenAI SSO/ChatGPT subscription promise, development story, and
+  TestFlight contact. Markdown-only scope; no product behavior changed.
+- 2026-07-21 — Restored after a subsequent history rewrite reset `main` past
+  the original README commit; no product behavior changed.
+
 ## Active line — PC-33: scrapbook notebook thumbnails
 
 Status: **implementation complete — Release-device inspection deferred**
